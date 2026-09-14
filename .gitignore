@@ -1,0 +1,68 @@
+## Build
+# Only build output. Bare "[Rr]elease/" / "x64/" patterns also swallowed source
+# folders such as src/MediaPlayer.Core/Release/ (AppRelease.cs was never committed).
+bin/
+obj/
+[Bb]uild/
+[Aa]rtifacts/
+*.user
+*.userosscache
+*.suo
+*.cache
+*.log
+*.vspscc
+*.vssscc
+.vs/
+*.nupkg
+*.snupkg
+project.lock.json
+artifacts/
+
+## NuGet (keep packages.lock.json)
+*.nuget.props
+*.nuget.targets
+
+## OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+## IDE
+.idea/
+*.swp
+*~
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+## Test / coverage
+TestResults/
+coverage/
+
+## Local secrets (server credentials for manual verification) — never commit
+emby-key.txt
+*-key.txt
+secrets/
+*.coverage
+*.coveragexml
+coverage.json
+coverage.cobertura.xml
+
+## Native / third-party binaries (hashes live in third_party/libmpv/LOCK.md)
+third_party/libmpv/bin/
+third_party/libmpv/*.dll
+third_party/libmpv/*.so
+third_party/libmpv/*.dylib
+*.pdb
+
+## Local secrets and machine-specific
+*.pfx
+*.p12
+.env
+.env.*
+appsettings.*.local.json
+
+## Logs and diagnostics dumps
+logs/
+*.dmp
+*.etl
