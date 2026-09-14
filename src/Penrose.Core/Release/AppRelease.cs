@@ -1,10 +1,10 @@
+using System.Text.Json;
+
 namespace Penrose.Core.Release;
 
 public enum UpdateStatus
 {
-    Disabled,
-    InvalidFeed,
-    ReadyToQuery,
+    InvalidVersion,
     UpToDate,
     Available,
 }
@@ -15,10 +15,17 @@ public sealed record UpdateDecision(
     Version? Remote);
 
 /// <summary>
-/// Version compare for portable zip / Velopack. Network I/O stays in the host.
+/// Update check against GitHub Releases: the endpoint, tag parsing and the version
+/// compare. Network I/O stays in the host.
 /// </summary>
 public static class AppRelease
 {
+    /// <summary>Latest release as JSON; its <c>tag_name</c> is the version tag (for example <c>v0.2.0</c>).</summary>
+    public const string LatestReleaseApi = "https://api.github.com/repos/zzzyang03/penrose/releases/latest";
+
+    /// <summary>Where the user downloads the release that <see cref="LatestReleaseApi"/> reported.</summary>
+    public const string LatestReleasePage = "https://github.com/zzzyang03/penrose/releases/latest";
+
     public static bool TryParse(string? text, out Version version)
     {
         version = new Version(0, 0, 0);
@@ -58,21 +65,38 @@ public static class AppRelease
         return left.CompareTo(right);
     }
 
-    public static UpdateDecision ForFeed(string? currentVersion, string? feedUrl)
+    /// <summary>Reads <c>tag_name</c> from a GitHub release document.</summary>
+    public static bool TryReadTag(string? json, out string tag)
     {
-        TryParse(currentVersion, out Version current);
-        if (string.IsNullOrWhiteSpace(feedUrl))
+        tag = "";
+        if (string.IsNullOrWhiteSpace(json))
         {
-            return new UpdateDecision(UpdateStatus.Disabled, current, null);
+            return false;
         }
 
-        if (!Uri.TryCreate(feedUrl.Trim(), UriKind.Absolute, out Uri? uri)
-            || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        try
         {
-            return new UpdateDecision(UpdateStatus.InvalidFeed, current, null);
-        }
+            using JsonDocument document = JsonDocument.Parse(json);
+            if (document.RootElement.ValueKind != JsonValueKind.Object
+                || !document.RootElement.TryGetProperty("tag_name", out JsonElement element)
+                || element.ValueKind != JsonValueKind.String)
+            {
+                return false;
+            }
 
-        return new UpdateDecision(UpdateStatus.ReadyToQuery, current, null);
+            string? value = element.GetString();
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return false;
+            }
+
+            tag = value.Trim();
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 
     public static UpdateDecision CompareRemote(string? currentVersion, string? remoteVersion)
@@ -80,7 +104,7 @@ public static class AppRelease
         TryParse(currentVersion, out Version current);
         if (!TryParse(remoteVersion, out Version remote))
         {
-            return new UpdateDecision(UpdateStatus.InvalidFeed, current, null);
+            return new UpdateDecision(UpdateStatus.InvalidVersion, current, null);
         }
 
         return remote > current

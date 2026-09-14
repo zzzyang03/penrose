@@ -882,6 +882,5 @@ public sealed partial class MainWindow
         public required ComboBox Language { get; init; }
         public required ComboBox Encoding { get; init; }
         public required ComboBox Ass { get; init; }
-        public required TextBox Feed { get; init; }
     }
 }

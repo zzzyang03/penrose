@@ -1,7 +1,6 @@
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.Windows.AppLifecycle;
-using Velopack;
 
 namespace Penrose.App.WinUI;
 
@@ -15,7 +14,6 @@ internal static class Program
     [STAThread]
     private static void Main()
     {
-        VelopackApp.Build().Run();
         WinRT.ComWrappersSupport.InitializeComWrappers();
         if (RedirectIfNecessary())
         {

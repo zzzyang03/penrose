@@ -29,7 +29,7 @@ Get the latest version from [**Releases**](https://github.com/zzzyang03/penrose/
 
 | File | Choose it if |
 |---|---|
-| `Penrose-<version>-win-x64-Setup.exe` | you want a regular per-user install with a Start menu entry (no administrator rights needed) |
+| `Penrose-<version>-win-x64-Setup.exe` | you want a regular install: the wizard lets you pick the folder, a Start menu folder and a desktop shortcut, and no administrator rights are needed (per user by default; `/ALLUSERS` installs for everyone) |
 | `Penrose-<version>-win-x64-portable.zip` | you want to unzip anywhere and run `Penrose.exe` |
 
 Both builds are self-contained, so .NET and the Windows App SDK do not need to be installed.
@@ -126,7 +126,8 @@ scripts\run-app.cmd
 dotnet test Penrose.sln
 ```
 
-To produce the release packages (portable zip and Velopack installer under `artifacts\`):
+To produce the release packages (portable zip and installer under `artifacts\`; the installer
+needs [Inno Setup 6](https://jrsoftware.org/isinfo.php), `winget install JRSoftware.InnoSetup`):
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\pack.ps1
@@ -190,7 +191,7 @@ only to identify content formats and server types.
 
 | 文件 | 适用情况 |
 |---|---|
-| `Penrose-<版本>-win-x64-Setup.exe` | 常规安装（仅当前用户，带开始菜单入口，不需要管理员权限） |
+| `Penrose-<版本>-win-x64-Setup.exe` | 常规安装：向导中可选择安装目录、开始菜单文件夹和桌面快捷方式，不需要管理员权限（默认仅当前用户，加 `/ALLUSERS` 参数可为所有用户安装） |
 | `Penrose-<版本>-win-x64-portable.zip` | 解压到任意位置，直接运行 `Penrose.exe` |
 
 两种包都自带运行时，无需另装 .NET 或 Windows App SDK。目前还没有代码签名，首次运行如果 SmartScreen 拦截，点 **更多信息 → 仍要运行**。
@@ -248,7 +249,7 @@ scripts\run-app.cmd                                                            #
 dotnet test Penrose.sln                                                    # 运行测试
 ```
 
-打包发布版（便携 zip 与 Velopack 安装包，输出到 `artifacts\`）：`powershell -NoProfile -ExecutionPolicy Bypass -File scripts\pack.ps1`。
+打包发布版（便携 zip 与安装包，输出到 `artifacts\`；安装包需要 [Inno Setup 6](https://jrsoftware.org/isinfo.php)，可用 `winget install JRSoftware.InnoSetup` 安装）：`powershell -NoProfile -ExecutionPolicy Bypass -File scripts\pack.ps1`。
 libmpv 二进制不入库，具体版本、下载地址和哈希见 [`third_party/libmpv/LOCK.md`](third_party/libmpv/LOCK.md)。
 
 ### 反馈与贡献
