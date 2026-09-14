@@ -1,17 +1,16 @@
 # libmpv lock
 
-Binaries are **not** stored in git. Place the extracted `libmpv-2.dll` (hard-link
-or copy as `mpv-2.dll`) and `d3dcompiler_43.dll` under
-`third_party/libmpv/bin/x64/` on a Windows machine.
+Binaries are **not** stored in git. `scripts/fetch-libmpv.ps1` downloads the
+archives below straight from the vendor's GitHub release, verifies their SHA-256
+and places `libmpv-2.dll` (plus a hard link or copy named `mpv-2.dll`) and the
+matching `mpv.exe` under `third_party/libmpv/bin/x64/`.
 `MpvNativeLibrary` also honors `MPV_LIBRARY_PATH`.
-
-`scripts/fetch-libmpv.ps1` downloads this snapshot via GitHub (`gh`).
 
 ## Why this snapshot (2026-09-03)
 
 The original candidate was shinchiro **release** `mpv-0.41.0-x86_64.7z`
 (SourceForge, 2025-12-25). That archive is the **player**, not libmpv, and
-SourceForge returned HTTP 403 from the Windows host. shinchiro GitHub Releases
+SourceForge rejected scripted downloads (HTTP 403). shinchiro GitHub Releases
 do not retain the 2025-12 tags.
 
 Locked instead: the same vendor, generic x86_64 (**not** x64-v3), **player +
@@ -44,8 +43,9 @@ commit plus a fresh verification pass.
 | libass | _reported at runtime via `mpv --version` / properties; not printed on the banner_ |
 | License | GPL (see LICENSE.notes.md) |
 
-`libavcodec 63.9.100` meets the P7 FEL **ABI** floor (≥ 62.35.100). That is not
-an FEL pass — `enhancement-layer` still has to be proven on hardware.
+`libavcodec 63.9.100` meets the libavcodec ABI floor (≥ 62.35.100) for decoding
+the Dolby Vision Profile 7 full enhancement layer (FEL). That is not an FEL
+pass — `enhancement-layer` still has to be proven on hardware.
 
 ## Comparison player (no libmpv; not used by the host)
 
@@ -70,9 +70,9 @@ If verification rejects FEL, keep `enhancement-layer=no`.
 
 ## Optional x86_64-v3 (comparison only, not the product lock)
 
-Same vendor, date, and git commit as the baseline. Reference CPU: Core Ultra 9 285H.
-`ffmpeg -benchmark` on the sample clips (libavcodec 63.9.100) did **not** show a
-≥10% single-thread gain vs generic. Keep `bin/x64` as the v1 lock. Sidecar
+Same vendor, date, and git commit as the baseline. On the development machine,
+`ffmpeg -benchmark` on sample clips (libavcodec 63.9.100) did **not** show a
+≥10% single-thread gain vs generic, so `bin/x64` stays the lock. Sidecar
 extract: `third_party/libmpv/bin/x64-v3/` (gitignored).
 
 | Field | Value |
@@ -95,15 +95,15 @@ third_party/libmpv/
   LICENSE.notes.md
   bin/x64/          gitignored
     libmpv-2.dll    (canonical export name)
-    mpv-2.dll       (hard-link of libmpv-2.dll; DllImport name)
-    d3dcompiler_43.dll
-    mpv.exe         (bare player, same commit)
-    mpv.com
+    mpv-2.dll       (hard link of libmpv-2.dll; DllImport name, the only copy that ships)
+    mpv.exe         (bare player, same commit; local comparisons only)
 ```
 
-`vulkan-1.dll` is a hard import on this build. This host provides it via the
-GPU driver (`%SystemRoot%\System32\vulkan-1.dll`). Do not copy a random
-loader into git.
+`vulkan-1.dll` is a hard import on this build. Current NVIDIA, AMD and Intel GPU
+drivers install it to `%SystemRoot%\System32`. Do not copy a random loader into git.
 
-The product host loads `mpv-2.dll` from this directory (or `MPV_LIBRARY_PATH`).
-Do not mix vendors across builds.
+`d3dcompiler_43.dll` from the player archive is not used: libmpv tries
+`d3dcompiler_47.dll` first, and that one is part of Windows 10 and 11.
+
+The product host loads `mpv-2.dll` from its own directory, from this directory
+in a development checkout, or from `MPV_LIBRARY_PATH`. Do not mix vendors across builds.

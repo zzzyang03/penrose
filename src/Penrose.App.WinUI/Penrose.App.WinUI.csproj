@@ -1,0 +1,76 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.22621.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <UseWinUI>true</UseWinUI>
+    <WindowsPackageType>None</WindowsPackageType>
+    <!-- Needed even unpackaged: without it `dotnet publish` leaves out Penrose.pri and the
+         compiled .xbf pages, and the published app dies with XamlParseException at launch. -->
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <Platforms>x64</Platforms>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Penrose.App.WinUI</RootNamespace>
+    <AssemblyName>Penrose</AssemblyName>
+    <ApplicationTitle>Penrose</ApplicationTitle>
+    <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsPackable>false</IsPackable>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
+    <WindowsAppSDKSelfContained Condition="'$(SelfContained)' == 'true'">true</WindowsAppSDKSelfContained>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" />
+    <PackageReference Include="Serilog" />
+    <PackageReference Include="Serilog.Sinks.File" />
+    <PackageReference Include="Velopack" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Premium-format logos for the transient chips (unpackaged: ms-appx:/// maps to the exe directory). -->
+    <Content Include="Assets\AppIcon.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\AppIcon.ico" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\Badges\*.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\Servers\*.png" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Penrose.Core\Penrose.Core.csproj" />
+    <ProjectReference Include="..\Penrose.Diagnostics\Penrose.Diagnostics.csproj" />
+    <ProjectReference Include="..\Penrose.Interop.LibMpv\Penrose.Interop.LibMpv.csproj" />
+    <ProjectReference Include="..\Penrose.Persistence\Penrose.Persistence.csproj" />
+    <ProjectReference Include="..\Penrose.Playback.Mpv\Penrose.Playback.Mpv.csproj" />
+    <ProjectReference Include="..\Penrose.Sources.Emby\Penrose.Sources.Emby.csproj" />
+    <ProjectReference Include="..\Penrose.VideoSurface.Abstractions\Penrose.VideoSurface.Abstractions.csproj" />
+    <ProjectReference Include="..\Penrose.VideoSurface.WinUI\Penrose.VideoSurface.WinUI.csproj" />
+  </ItemGroup>
+  <!-- Framework-dependent builds only: the shell verb goes through this launcher so a
+       user-local .NET in %USERPROFILE%\.dotnet is found (see FileAssociation). -->
+  <Target Name="CopyDotnetRootLauncher" AfterTargets="Build" Condition="'$(SelfContained)' != 'true'">
+    <Copy
+      SourceFiles="$(MSBuildThisFileDirectory)..\..\scripts\start-app-local.cmd"
+      DestinationFolder="$(OutputPath)"
+      SkipUnchangedFiles="true" />
+  </Target>
+  <PropertyGroup>
+    <LibMpvBin>$(RepoRoot)third_party\libmpv\bin\x64</LibMpvBin>
+  </PropertyGroup>
+  <!-- Only mpv-2.dll (the DllImport name) is copied; libmpv-2.dll is the same 120 MB file
+       under its export name. d3dcompiler_43.dll is not needed: libmpv loads the
+       d3dcompiler_47.dll that ships with Windows 10/11 first. -->
+  <Target Name="CopyLibMpv" AfterTargets="Build" Condition="Exists('$(LibMpvBin)\mpv-2.dll')">
+    <Copy
+      SourceFiles="$(LibMpvBin)\mpv-2.dll"
+      DestinationFolder="$(OutputPath)"
+      SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopyLibMpvOnPublish" AfterTargets="Publish" Condition="Exists('$(LibMpvBin)\mpv-2.dll')">
+    <Copy
+      SourceFiles="$(LibMpvBin)\mpv-2.dll"
+      DestinationFolder="$(PublishDir)"
+      SkipUnchangedFiles="true" />
+  </Target>
+</Project>

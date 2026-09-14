@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Penrose.VideoSurface</RootNamespace>
+    <Description>IVideoSurface and display capability contracts. No WinRT or Avalonia references.</Description>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Penrose.Core\Penrose.Core.csproj" />
+  </ItemGroup>
+</Project>

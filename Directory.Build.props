@@ -15,7 +15,9 @@
     <NuGetAuditMode>all</NuGetAuditMode>
     <RepoRoot>$(MSBuildThisFileDirectory)</RepoRoot>
     <Version>0.1.0</Version>
-    <Product>Media Player</Product>
-    <Authors>media-player</Authors>
+    <Product>Penrose</Product>
+    <Authors>Zhehao Yang</Authors>
+    <Copyright>Copyright (C) 2026 Zhehao Yang</Copyright>
+    <RepositoryUrl>https://github.com/zzzyang03/penrose</RepositoryUrl>
   </PropertyGroup>
 </Project>

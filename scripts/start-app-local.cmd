@@ -1,4 +1,5 @@
 @echo off
-set "DOTNET_ROOT=%USERPROFILE%\.dotnet"
-set "PATH=%DOTNET_ROOT%;%PATH%"
-start "" "%~dp0MediaPlayer.App.WinUI.exe" %*
+rem Copied next to framework-dependent builds and used by the "open with" verb.
+rem Points DOTNET_ROOT at a user-local .NET when there is one.
+if exist "%USERPROFILE%\.dotnet\dotnet.exe" set "DOTNET_ROOT=%USERPROFILE%\.dotnet"
+start "" "%~dp0Penrose.exe" %*

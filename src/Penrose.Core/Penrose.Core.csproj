@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Penrose.Core</RootNamespace>
+    <Description>Shared playback snapshot, reducer, settings, and engine protocol. Must not reference Windows APIs.</Description>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+</Project>

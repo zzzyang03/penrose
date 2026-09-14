@@ -3,16 +3,18 @@ setlocal
 rem Double-click this, or run it from any directory. Optional first argument
 rem "--build" forces a rebuild; otherwise the host is rebuilt only when a source
 rem file is newer than the built exe (a no-op WinUI build still costs 10-15 s).
-rem Do not double-click MediaPlayer.App.WinUI.exe: .NET 10 is in
-rem %USERPROFILE%\.dotnet, while C:\Program Files\dotnet only has net6/net8.
+rem A user-local SDK in %USERPROFILE%\.dotnet wins over dotnet on PATH, and
+rem DOTNET_ROOT lets the framework-dependent exe find that runtime too.
+if not exist "%USERPROFILE%\.dotnet\dotnet.exe" goto :env_done
 set "DOTNET_ROOT=%USERPROFILE%\.dotnet"
-set "PATH=%DOTNET_ROOT%;%PATH%"
+set "PATH=%USERPROFILE%\.dotnet;%PATH%"
+:env_done
 
 cd /d "%~dp0\.."
 set "REPO=%CD%"
-set "PROJ=%REPO%\src\MediaPlayer.App.WinUI\MediaPlayer.App.WinUI.csproj"
-set "OUTDIR=%REPO%\src\MediaPlayer.App.WinUI\bin\x64\Debug\net10.0-windows10.0.22621.0\win-x64"
-set "EXE=%OUTDIR%\MediaPlayer.App.WinUI.exe"
+set "PROJ=%REPO%\src\Penrose.App.WinUI\Penrose.App.WinUI.csproj"
+set "OUTDIR=%REPO%\src\Penrose.App.WinUI\bin\x64\Debug\net10.0-windows10.0.22621.0\win-x64"
+set "EXE=%OUTDIR%\Penrose.exe"
 
 if not exist "%PROJ%" (
   echo Project not found:
@@ -38,7 +40,7 @@ if /I "%NEEDBUILD%"=="skip" (
 
 :build
 echo Building host...
-"%DOTNET_ROOT%\dotnet.exe" build "%PROJ%" -p:Platform=x64 -v q
+dotnet build "%PROJ%" -p:Platform=x64 -v q
 if errorlevel 1 (
   pause
   exit /b 1

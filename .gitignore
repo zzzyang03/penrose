@@ -1,6 +1,6 @@
 ## Build
 # Only build output. Bare "[Rr]elease/" / "x64/" patterns also swallowed source
-# folders such as src/MediaPlayer.Core/Release/ (AppRelease.cs was never committed).
+# folders such as src/Penrose.Core/Release/ (AppRelease.cs was never committed).
 bin/
 obj/
 [Bb]uild/
@@ -16,7 +16,6 @@ obj/
 *.nupkg
 *.snupkg
 project.lock.json
-artifacts/
 
 ## NuGet (keep packages.lock.json)
 *.nuget.props

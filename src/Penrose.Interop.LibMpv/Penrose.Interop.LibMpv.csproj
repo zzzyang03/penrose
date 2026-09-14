@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Penrose.Interop.LibMpv</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsPackable>false</IsPackable>
+    <Description>libmpv P/Invoke, SafeHandle, mpv_node, native loader.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Penrose.Playback.Mpv" />
+    <InternalsVisibleTo Include="Penrose.Interop.LibMpv.Tests" />
+    <InternalsVisibleTo Include="Penrose.Playback.Mpv.Tests" />
+  </ItemGroup>
+</Project>

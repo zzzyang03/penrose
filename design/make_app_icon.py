@@ -91,7 +91,7 @@ def write_png_ico(png: Image.Image, dest: Path) -> None:
 
 def main() -> None:
     root = Path(__file__).resolve().parent
-    assets = root.parent / "src" / "MediaPlayer.App.WinUI" / "Assets"
+    assets = root.parent / "src" / "Penrose.App.WinUI" / "Assets"
     if len(sys.argv) != 2:
         raise SystemExit("usage: make_app_icon.py <original-white-canvas.png>")
     original = Path(sys.argv[1])
@@ -100,7 +100,6 @@ def main() -> None:
     png = knock_out(original)
     if png.getpixel((0, 0))[3] != 0:
         raise SystemExit("corner is still opaque")
-    png.save(root / "penrose-icon-navy.png", "PNG")
     png.save(assets / "AppIcon.png", "PNG")
     write_png_ico(png, assets / "AppIcon.ico")
     print(f"wrote {assets / 'AppIcon.png'} and {assets / 'AppIcon.ico'}")

@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Penrose.Sources.Emby</RootNamespace>
+    <Description>Emby PlaybackInfo parser and DeviceProfile JSON. Independent of Jellyfin.</Description>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Penrose.Core\Penrose.Core.csproj" />
+  </ItemGroup>
+</Project>
