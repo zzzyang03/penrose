@@ -20,7 +20,7 @@
 </p>
 
 > [!NOTE]
-> **Early preview.** Penrose 0.1.0 has been developed and tested on a single Windows 11 x64 setup.
+> **Early preview.** Penrose has been developed and tested on a single Windows 11 x64 setup.
 > Expect rough edges, and please [report](https://github.com/zzzyang03/penrose/issues/new/choose) what breaks.
 
 ## Download
@@ -183,7 +183,7 @@ only to identify content formats and server types.
 </p>
 
 > [!NOTE]
-> **早期预览版。** Penrose 0.1.0 目前只在一套 Windows 11 x64 环境上开发和测试过，难免有粗糙之处，遇到问题欢迎[反馈](https://github.com/zzzyang03/penrose/issues/new/choose)。
+> **早期预览版。** Penrose 目前只在一套 Windows 11 x64 环境上开发和测试过，难免有粗糙之处，遇到问题欢迎[反馈](https://github.com/zzzyang03/penrose/issues/new/choose)。
 
 ### 下载
 
