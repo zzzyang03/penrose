@@ -1,17 +1,19 @@
-name: Bug report
-description: Something does not work as expected
+name: 问题报告 / Bug report
+description: 有功能不正常 / Something does not work as expected
 labels: [bug]
 body:
   - type: markdown
     attributes:
       value: |
+        感谢反馈！提交前请先搜索已有的 issue，并去掉服务器地址、用户名、密码和令牌。用中文或英文填写都可以。
+
         Thanks for taking the time to report this. Please search existing issues first,
-        and leave out server addresses, user names, passwords and tokens.
+        and leave out server addresses, user names, passwords and tokens. Chinese or English is fine.
 
   - type: input
     id: version
     attributes:
-      label: Penrose version
+      label: Penrose 版本 / Penrose version
       placeholder: "0.1.0"
     validations:
       required: true
@@ -19,18 +21,18 @@ body:
   - type: dropdown
     id: install
     attributes:
-      label: How did you install Penrose?
+      label: 安装方式 / How did you install Penrose?
       options:
-        - Installer (Setup.exe)
-        - Portable zip
-        - Built from source
+        - 安装包 / Installer (Setup.exe)
+        - 便携版 / Portable zip
+        - 从源码构建 / Built from source
     validations:
       required: true
 
   - type: input
     id: windows
     attributes:
-      label: Windows version
+      label: Windows 版本 / Windows version
       placeholder: "Windows 11 24H2 (build 26100.xxxx)"
     validations:
       required: true
@@ -38,32 +40,32 @@ body:
   - type: input
     id: gpu
     attributes:
-      label: GPU and driver version
+      label: 显卡与驱动版本 / GPU and driver version
       placeholder: "NVIDIA GeForce RTX 4070, driver 5xx.xx"
 
   - type: input
     id: display
     attributes:
-      label: Display, connection and Windows HDR setting
+      label: 显示器、连接方式与 Windows HDR 设置 / Display, connection and Windows HDR setting
       placeholder: "LG C3 over HDMI 2.1, Windows HDR on"
 
   - type: dropdown
     id: source
     attributes:
-      label: Where does the media come from?
+      label: 媒体来源 / Where does the media come from?
       options:
-        - Local file or folder
+        - 本地文件或文件夹 / Local file or folder
         - URL
-        - Emby server
-        - Other
+        - Emby 服务器 / Emby server
+        - 其他 / Other
 
   - type: textarea
     id: steps
     attributes:
-      label: Steps to reproduce
+      label: 复现步骤 / Steps to reproduce
       placeholder: |
-        1. Open ...
-        2. Press ...
+        1. 打开 / Open ...
+        2. 按下 / Press ...
         3. ...
     validations:
       required: true
@@ -71,22 +73,24 @@ body:
   - type: textarea
     id: behavior
     attributes:
-      label: Expected and actual behavior
-      description: What did you expect to happen, and what happened instead?
+      label: 预期与实际表现 / Expected and actual behavior
+      description: 你预期会发生什么，实际发生了什么？ / What did you expect to happen, and what happened instead?
     validations:
       required: true
 
   - type: textarea
     id: media
     attributes:
-      label: Media details
-      description: Container, video codec, resolution, HDR format and audio format, if relevant (for example from MediaInfo).
+      label: 媒体信息 / Media details
+      description: 如果相关，请写明容器、视频编码、分辨率、HDR 格式和音频格式（例如从 MediaInfo 查看）。 / Container, video codec, resolution, HDR format and audio format, if relevant (for example from MediaInfo).
 
   - type: textarea
     id: diagnostics
     attributes:
-      label: Diagnostics
+      label: 诊断信息 / Diagnostics
       description: |
+        在播放器窗口按 **E** 导出诊断信息，文件保存在 `%LOCALAPPDATA%\Penrose\logs\bundles`。令牌和密码会自动隐去，但附上之前请自己检查一遍。
+
         Press **E** in the player window to export diagnostics. The file is saved under
         `%LOCALAPPDATA%\Penrose\logs\bundles`. Tokens and passwords are redacted automatically,
         but please look through the file before attaching it here.
