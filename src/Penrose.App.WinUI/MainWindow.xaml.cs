@@ -765,7 +765,9 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        await _surface.ApplyFocusAsync(focused).ConfigureAwait(true);
+        // The pipeline follows the display, not focus: this only rebuilds when
+        // Windows HDR was toggled while the window was in the background.
+        await _surface.RefreshOutputPipelineAsync().ConfigureAwait(true);
         await RefreshStatusAsync().ConfigureAwait(true);
     }
 
@@ -785,9 +787,7 @@ public sealed partial class MainWindow : Window
             SurfaceLayout layout = _surface?.ReadLayout() ?? ReadLayout();
 
             DisplayColorCapabilities? display = WindowsAdvancedColor.ForWindow(_hwnd);
-            string pipeline = display?.IsAdvancedColor == true
-                ? OutputPipeline.ScRgb
-                : OutputPipeline.Sdr;
+            string pipeline = OutputPipeline.Windowed(display?.IsAdvancedColor == true);
             Log.Information(
                 "Start: display mode={Mode} peak={Peak} pipeline={Pipeline} layout={Layout}",
                 display?.ActiveColorMode,
@@ -1176,7 +1176,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        await _surface.RefreshDisplayTargetsAsync(_windowFocused).ConfigureAwait(true);
+        await _surface.RefreshDisplayTargetsAsync().ConfigureAwait(true);
         await ApplyDisplayFpsAsync().ConfigureAwait(true);
         await RefreshStatusAsync().ConfigureAwait(true);
     }
@@ -1189,7 +1189,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        await _surface.ApplyFocusAsync(_windowFocused).ConfigureAwait(true);
+        await _surface.RefreshOutputPipelineAsync().ConfigureAwait(true);
         await RefreshStatusAsync().ConfigureAwait(true);
     }
 
@@ -2139,7 +2139,7 @@ public sealed partial class MainWindow : Window
         await Task.Delay(400).ConfigureAwait(true);
         if (_surface is not null && !_surface.IsTopLevel && !_surface.IsBusy)
         {
-            await _surface.ApplyFocusAsync(_windowFocused).ConfigureAwait(true);
+            await _surface.RefreshOutputPipelineAsync().ConfigureAwait(true);
         }
 
         ShowOsd(_ui.HdrOnOsd);
@@ -2158,7 +2158,7 @@ public sealed partial class MainWindow : Window
         await Task.Delay(400).ConfigureAwait(true);
         if (_surface is not null && !_surface.IsTopLevel && !_surface.IsBusy)
         {
-            await _surface.ApplyFocusAsync(_windowFocused).ConfigureAwait(true);
+            await _surface.RefreshOutputPipelineAsync().ConfigureAwait(true);
         }
     }
 
@@ -2617,7 +2617,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        await _surface.LeaveTopLevelAsync(DisplayIsAdvancedColor(), _windowFocused).ConfigureAwait(true);
+        await _surface.LeaveTopLevelAsync(DisplayIsAdvancedColor()).ConfigureAwait(true);
         _topLevelAutomatic = false;
         ApplyTopLevelChrome(false);
         await RefreshStatusAsync().ConfigureAwait(true);

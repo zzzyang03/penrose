@@ -8,8 +8,8 @@ using Microsoft.UI.Xaml.Controls;
 namespace Penrose.VideoSurface.WinUI;
 
 /// <summary>
-/// Composition SwapChainPanel. Focused HDR → scRGB; unfocus/HDR-off → SDR.
-/// Windowed PQ is not applied here.
+/// Composition SwapChainPanel. Advanced Color desktop → scRGB, otherwise SDR;
+/// window focus never changes the pipeline. Windowed PQ is not applied here.
 /// </summary>
 public sealed class D3d11CompositionSurface : IVideoSurface
 {
@@ -27,7 +27,6 @@ public sealed class D3d11CompositionSurface : IVideoSurface
     private bool _wasReconfiguring;
     private DispatcherTimer? _fsWatch;
     private HostWindowMoveTracker? _moveTracker;
-    private bool _windowFocused = true;
     private EventHandler<DisplayColorCapabilities>? _displayChanged;
     private EventHandler? _topLevelLeaveRequested;
     private EventHandler? _deviceLost;
@@ -109,7 +108,7 @@ public sealed class D3d11CompositionSurface : IVideoSurface
 
         IsInteractiveMove = false;
         await BindAsync(force: true, cancellationToken).ConfigureAwait(true);
-        await RefreshDisplayTargetsAsync(_windowFocused, cancellationToken).ConfigureAwait(true);
+        await RefreshDisplayTargetsAsync(cancellationToken).ConfigureAwait(true);
     }
 
     public Task InitializeAsync(IPlaybackEngine engine, CancellationToken cancellationToken = default)
@@ -238,7 +237,7 @@ public sealed class D3d11CompositionSurface : IVideoSurface
                 try
                 {
                     await _engine.ApplyPropertiesAsync(
-                            TopLevelFullscreen.LeaveProperties(display?.IsAdvancedColor ?? windowsHdrOn, windowFocused: true, display),
+                            TopLevelFullscreen.LeaveProperties(display?.IsAdvancedColor ?? windowsHdrOn, display),
                             cancellationToken)
                         .ConfigureAwait(true);
                     await BindAsync(force: true, cancellationToken).ConfigureAwait(true);
@@ -257,7 +256,7 @@ public sealed class D3d11CompositionSurface : IVideoSurface
         }
     }
 
-    public async Task LeaveTopLevelAsync(bool windowsHdrOn, bool windowFocused, CancellationToken cancellationToken = default)
+    public async Task LeaveTopLevelAsync(bool windowsHdrOn, CancellationToken cancellationToken = default)
     {
         if (_engine is null || !IsTopLevel)
         {
@@ -274,15 +273,14 @@ public sealed class D3d11CompositionSurface : IVideoSurface
             PublishDisplay(display);
             bool advanced = display?.IsAdvancedColor ?? windowsHdrOn;
             await _engine.ApplyPropertiesAsync(
-                    TopLevelFullscreen.LeaveProperties(advanced, windowFocused, display),
+                    TopLevelFullscreen.LeaveProperties(advanced, display),
                     cancellationToken)
                 .ConfigureAwait(true);
             IsTopLevel = false;
             VoWindowHandle = 0;
-            _windowFocused = windowFocused;
             // Must agree with the pipeline LeaveProperties just chose, or the next
-            // ApplyFocusAsync early-returns on a stale flag.
-            _sdrOverride = !windowFocused || !advanced;
+            // RefreshOutputPipelineAsync early-returns on a stale flag.
+            _sdrOverride = !advanced;
             SurfaceGeneration++;
             if (!_disposed)
             {
@@ -296,17 +294,22 @@ public sealed class D3d11CompositionSurface : IVideoSurface
         }
     }
 
-    public async Task ApplyFocusAsync(bool focused, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Re-reads the window's display and switches between scRGB and SDR only when
+    /// its Advanced Color state changed. Safe to call on every activation: a
+    /// focus change alone is a no-op, so the swap chain survives it.
+    /// </summary>
+    public async Task RefreshOutputPipelineAsync(CancellationToken cancellationToken = default)
     {
         if (_engine is null || IsTopLevel || IsBusy || _disposed || SurfaceBindGate.ShouldSkipDisplayRefresh(IsInteractiveMove))
         {
             return;
         }
 
-        _windowFocused = focused;
         DisplayColorCapabilities? display = ReadDisplay();
         PublishDisplay(display);
-        bool wantSdr = !focused || !(display?.IsAdvancedColor ?? WindowsAdvancedColor.AnyHdrEnabled());
+        bool advanced = display?.IsAdvancedColor ?? WindowsAdvancedColor.AnyHdrEnabled();
+        bool wantSdr = !advanced;
         if (wantSdr == _sdrOverride && _boundAddress != 0)
         {
             return;
@@ -316,7 +319,7 @@ public sealed class D3d11CompositionSurface : IVideoSurface
         try
         {
             Unbind();
-            string pipeline = wantSdr ? OutputPipeline.Sdr : OutputPipeline.ScRgb;
+            string pipeline = OutputPipeline.Windowed(advanced);
             SurfaceBootstrapOptions options = OutputPipeline.Apply(
                 new SurfaceBootstrapOptions { D3d11OutputMode = "composition" },
                 pipeline,
@@ -332,7 +335,7 @@ public sealed class D3d11CompositionSurface : IVideoSurface
         }
     }
 
-    public async Task RefreshDisplayTargetsAsync(bool windowFocused, CancellationToken cancellationToken = default)
+    public async Task RefreshDisplayTargetsAsync(CancellationToken cancellationToken = default)
     {
         if (_engine is null || IsBusy || _disposed || SurfaceBindGate.ShouldSkipDisplayRefresh(IsInteractiveMove))
         {
@@ -381,7 +384,7 @@ public sealed class D3d11CompositionSurface : IVideoSurface
         bool modeChanged = previous is null || previous.IsAdvancedColor != display.IsAdvancedColor;
         if (modeChanged)
         {
-            await ApplyFocusAsync(windowFocused, cancellationToken).ConfigureAwait(true);
+            await RefreshOutputPipelineAsync(cancellationToken).ConfigureAwait(true);
             return;
         }
 

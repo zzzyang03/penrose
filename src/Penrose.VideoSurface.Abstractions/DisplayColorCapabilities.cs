@@ -105,6 +105,12 @@ public static class OutputPipeline
     public const string ScRgb = "scrgb";
     public const string Hdr10 = "hdr10";
 
+    /// <summary>
+    /// Composition pipeline for a window. Focus is irrelevant: DWM composes
+    /// scRGB for any visible window on an Advanced Color desktop.
+    /// </summary>
+    public static string Windowed(bool displayAdvancedColor) => displayAdvancedColor ? ScRgb : Sdr;
+
     public static SurfaceBootstrapOptions Apply(
         SurfaceBootstrapOptions options,
         string pipeline,
