@@ -1,0 +1,92 @@
+name: Bug report
+description: Something does not work as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this. Please search existing issues first,
+        and leave out server addresses, user names, passwords and tokens.
+
+  - type: input
+    id: version
+    attributes:
+      label: Penrose version
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: How did you install Penrose?
+      options:
+        - Installer (Setup.exe)
+        - Portable zip
+        - Built from source
+    validations:
+      required: true
+
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: "Windows 11 24H2 (build 26100.xxxx)"
+    validations:
+      required: true
+
+  - type: input
+    id: gpu
+    attributes:
+      label: GPU and driver version
+      placeholder: "NVIDIA GeForce RTX 4070, driver 5xx.xx"
+
+  - type: input
+    id: display
+    attributes:
+      label: Display, connection and Windows HDR setting
+      placeholder: "LG C3 over HDMI 2.1, Windows HDR on"
+
+  - type: dropdown
+    id: source
+    attributes:
+      label: Where does the media come from?
+      options:
+        - Local file or folder
+        - URL
+        - Emby server
+        - Other
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open ...
+        2. Press ...
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and actual behavior
+      description: What did you expect to happen, and what happened instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: media
+    attributes:
+      label: Media details
+      description: Container, video codec, resolution, HDR format and audio format, if relevant (for example from MediaInfo).
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: |
+        Press **E** in the player window to export diagnostics. The file is saved under
+        `%LOCALAPPDATA%\Penrose\logs\bundles`. Tokens and passwords are redacted automatically,
+        but please look through the file before attaching it here.

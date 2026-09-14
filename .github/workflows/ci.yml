@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  build-and-test:
+    name: Build and test (Windows x64)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v6
+        with:
+          path: ~\.nuget\packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/packages.lock.json', 'Directory.Packages.props') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Cache libmpv archives
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}\penrose-mpv\*.7z
+          key: libmpv-${{ hashFiles('scripts/fetch-libmpv.ps1') }}
+
+      # The interop and engine tests load the real libmpv, so fetch the locked build first.
+      - name: Fetch locked libmpv
+        run: ./scripts/fetch-libmpv.ps1 -CacheDir "${{ runner.temp }}\penrose-mpv"
+
+      - name: Restore libraries and tests
+        run: dotnet restore Penrose.sln --locked-mode
+
+      - name: Test
+        run: dotnet test Penrose.sln --configuration Release --no-restore
+
+      - name: Restore Windows app
+        run: dotnet restore src/Penrose.App.WinUI/Penrose.App.WinUI.csproj --locked-mode -p:Platform=x64
+
+      - name: Build Windows app
+        run: dotnet build src/Penrose.App.WinUI/Penrose.App.WinUI.csproj --configuration Release --no-restore -p:Platform=x64
