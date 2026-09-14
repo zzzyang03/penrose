@@ -4,6 +4,8 @@ All notable changes to Penrose are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
 ## [0.1.1] - 2026-09-14
 
 ### Changed
@@ -44,5 +46,6 @@ First public preview.
   Simplified Chinese UI, and a diagnostics export that redacts secrets.
 - Self-contained portable zip and Velopack installer for Windows x64.
 
+[Unreleased]: https://github.com/zzzyang03/penrose/compare/v0.1.1...HEAD
 [0.1.1]: https://github.com/zzzyang03/penrose/releases/tag/v0.1.1
 [0.1.0]: https://github.com/zzzyang03/penrose/releases/tag/v0.1.0
