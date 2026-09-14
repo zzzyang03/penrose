@@ -9,6 +9,16 @@ Simplified Chinese first, then in English.
 
 ## [Unreleased]
 
+### 修复
+
+- 窗口失去焦点时不再把 HDR（scRGB）输出切换为 SDR。此前每次切换窗口都会重建交换链，造成短暂黑屏和卡顿；现在窗口在后台时继续以 HDR 播放。
+
+### Fixed
+
+- Losing window focus no longer switches HDR (scRGB) output to SDR. Every focus
+  change used to rebuild the swap chain, causing a brief black screen and stutter;
+  playback now stays in HDR while the window is in the background.
+
 ## [0.1.1] - 2026-09-14
 
 ### 变更

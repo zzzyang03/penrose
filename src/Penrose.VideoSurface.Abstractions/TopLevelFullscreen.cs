@@ -42,10 +42,9 @@ public static class TopLevelFullscreen
 
     public static IReadOnlyDictionary<string, string> LeaveProperties(
         bool windowsHdrOn,
-        bool windowFocused,
         DisplayColorCapabilities? display = null)
     {
-        string pipeline = windowsHdrOn && windowFocused ? OutputPipeline.ScRgb : OutputPipeline.Sdr;
+        string pipeline = OutputPipeline.Windowed(windowsHdrOn);
         SurfaceBootstrapOptions surface = OutputPipeline.Apply(
             new SurfaceBootstrapOptions { D3d11OutputMode = "composition" },
             pipeline,

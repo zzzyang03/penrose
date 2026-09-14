@@ -136,11 +136,9 @@ public sealed class SurfaceLayoutTests
     }
 
     [Fact]
-    public void Route_a_leave_restores_composition_scrgb_when_focused()
+    public void Route_a_leave_restores_composition_scrgb_when_windows_hdr_on()
     {
-        IReadOnlyDictionary<string, string> leave = TopLevelFullscreen.LeaveProperties(
-            windowsHdrOn: true,
-            windowFocused: true);
+        IReadOnlyDictionary<string, string> leave = TopLevelFullscreen.LeaveProperties(windowsHdrOn: true);
         Assert.Equal("composition", leave["d3d11-output-mode"]);
         Assert.Equal("rgba16f", leave["d3d11-output-format"]);
         Assert.Equal("linear", leave["d3d11-output-csp"]);
@@ -148,6 +146,18 @@ public sealed class SurfaceLayoutTests
         Assert.Equal("no", leave["force-window"]);
         Assert.Equal("yes", leave["keepaspect-window"]);
         Assert.Equal("no", leave["osc"]);
+
+        IReadOnlyDictionary<string, string> sdr = TopLevelFullscreen.LeaveProperties(windowsHdrOn: false);
+        Assert.Equal("composition", sdr["d3d11-output-mode"]);
+        Assert.Equal("rgba8", sdr["d3d11-output-format"]);
+        Assert.Equal("srgb", sdr["d3d11-output-csp"]);
+    }
+
+    [Fact]
+    public void Windowed_pipeline_follows_display_only()
+    {
+        Assert.Equal(OutputPipeline.ScRgb, OutputPipeline.Windowed(displayAdvancedColor: true));
+        Assert.Equal(OutputPipeline.Sdr, OutputPipeline.Windowed(displayAdvancedColor: false));
     }
 
     [Fact]
