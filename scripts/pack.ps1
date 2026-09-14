@@ -1,6 +1,8 @@
-# Publish a self-contained portable zip, and a Velopack installer when vpk is available.
+# Publish a self-contained portable zip and the Inno Setup installer.
 # Usage (repo root):
 #   powershell -NoProfile -ExecutionPolicy Bypass -File scripts\pack.ps1
+# The installer needs Inno Setup 6 (winget install JRSoftware.InnoSetup); -SkipInstaller
+# builds only the zip.
 param(
     [string]$Version = "",
     [switch]$SkipInstaller
@@ -37,8 +39,7 @@ if (-not $Version) {
 $Proj = Join-Path $Root "src\Penrose.App.WinUI\Penrose.App.WinUI.csproj"
 $Publish = Join-Path $Root "artifacts\publish\win-x64"
 $Zip = Join-Path $Root "artifacts\Penrose-$Version-win-x64-portable.zip"
-$InstallerOut = Join-Path $Root "artifacts\installer"
-$Icon = Join-Path $Root "src\Penrose.App.WinUI\Assets\AppIcon.ico"
+$Setup = Join-Path $Root "artifacts\Penrose-$Version-win-x64-Setup.exe"
 
 if (Test-Path $Publish) {
     Remove-Item $Publish -Recurse -Force
@@ -103,26 +104,44 @@ if ($SkipInstaller) {
     return
 }
 
-Write-Host "Restoring vpk..."
-& $Dotnet tool restore --tool-manifest (Join-Path $Root ".config\dotnet-tools.json") -v minimal
-if ($LASTEXITCODE -ne 0) {
-    Write-Warning "vpk restore failed; portable zip is still valid."
-    return
+$Iscc = $null
+foreach ($base in ${env:ProgramFiles(x86)}, $env:ProgramFiles, (Join-Path $env:LOCALAPPDATA "Programs")) {
+    if ($base -and (Test-Path (Join-Path $base "Inno Setup 6\ISCC.exe"))) {
+        $Iscc = Join-Path $base "Inno Setup 6\ISCC.exe"
+        break
+    }
+}
+if (-not $Iscc) {
+    $command = Get-Command ISCC.exe -ErrorAction SilentlyContinue
+    if ($command) {
+        $Iscc = $command.Source
+    }
+}
+if (-not $Iscc) {
+    throw "Inno Setup 6 not found (winget install JRSoftware.InnoSetup). Pass -SkipInstaller to build only the zip."
 }
 
-if (Test-Path $InstallerOut) {
-    Remove-Item $InstallerOut -Recurse -Force
+# The Windows version resource needs four numeric parts: drop a pre-release or build suffix
+# and pad ("0.2.0-beta.1" -> "0.2.0.0").
+$numeric = ($Version -split "[-+]")[0]
+if ($numeric -notmatch "^\d+(\.\d+){0,3}$") {
+    throw "Version '$Version' does not start with a numeric a.b.c version."
 }
-New-Item -ItemType Directory -Force -Path $InstallerOut | Out-Null
+$parts = @($numeric -split "\.")
+while ($parts.Count -lt 4) {
+    $parts += "0"
+}
+$FileVersion = $parts -join "."
 
-# The pack id is also the install folder (%LOCALAPPDATA%\PenrosePlayer). It must differ
-# from the data folder (%LOCALAPPDATA%\Penrose), which an uninstall must not delete.
-Write-Host "Velopack pack..."
-& $Dotnet tool run vpk -- pack -u PenrosePlayer -v $Version -p $Publish -e Penrose.exe -o $InstallerOut `
-    --packTitle "Penrose" --packAuthors "Zhehao Yang" --icon $Icon
-if ($LASTEXITCODE -ne 0) {
-    Write-Warning "vpk pack failed; portable zip is still valid."
-    return
+if (Test-Path $Setup) {
+    Remove-Item $Setup -Force
+}
+Write-Host "Compiling installer (Inno Setup)..."
+& $Iscc /Q "/DAppVersion=$Version" "/DFileVersion=$FileVersion" "/DPublishDir=$Publish" `
+    "/DOutputDir=$(Split-Path $Setup)" "/DOutputBaseFilename=$([IO.Path]::GetFileNameWithoutExtension($Setup))" `
+    (Join-Path $Root "installer\Penrose.iss")
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path $Setup)) {
+    throw "Inno Setup compile failed"
 }
 
-Write-Host "Installer: $InstallerOut"
+Write-Host "Installer: $Setup"

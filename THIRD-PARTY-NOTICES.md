@@ -55,7 +55,6 @@ The Microsoft license texts ship inside the corresponding NuGet packages.
 | [SQLitePCLRaw](https://github.com/ericsink/SQLitePCL.raw) with `e_sqlite3` | 2.1.12 | Apache-2.0; SQLite itself is in the public domain |
 | [Serilog](https://github.com/serilog/serilog) | 4.4.0 | Apache-2.0 |
 | [Serilog.Sinks.File](https://github.com/serilog/serilog-sinks-file) | 7.0.0 | Apache-2.0 |
-| [Velopack](https://github.com/velopack/velopack) | 1.2.0 | MIT |
 
 ## Trademarks
 

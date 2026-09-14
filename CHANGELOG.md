@@ -4,6 +4,22 @@ All notable changes to Penrose are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- The Windows installer is now an Inno Setup wizard: choose the install folder and
+  whether to create a Start menu folder, then, after installing, whether to add a
+  desktop shortcut and launch Penrose. It installs per user by default
+  (`/ALLUSERS` installs for everyone) and uninstalls from Apps & features.
+- "Check for updates" asks GitHub Releases for the latest version and points to the
+  download page; the update feed setting is gone.
+
+### Removed
+
+- Velopack. The app no longer applies updates itself; install a new release over
+  the old one instead.
+
 ## [0.1.0] - 2026-09-14
 
 First public preview.

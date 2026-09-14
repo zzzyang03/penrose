@@ -16,6 +16,5 @@
 
     <!-- Windows host (WinAppSDK). Not referenced by Penrose.sln. -->
     <PackageVersion Include="Microsoft.WindowsAppSDK" Version="2.4.0" />
-    <PackageVersion Include="Velopack" Version="1.2.0" />
   </ItemGroup>
 </Project>

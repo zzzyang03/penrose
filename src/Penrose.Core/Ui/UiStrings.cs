@@ -73,7 +73,6 @@ public sealed record UiStrings
     public required string RegisterDefault { get; init; }
     public required string ImportMpvConf { get; init; }
     public required string AmpWizard { get; init; }
-    public required string UpdateFeedPlaceholder { get; init; }
     public required string CheckUpdates { get; init; }
     public required string Version { get; init; }
     public required string PictureQuality { get; init; }
@@ -82,7 +81,6 @@ public sealed record UiStrings
     public required string QualityHigh { get; init; }
     public required string SubEncoding { get; init; }
     public required string AssOverride { get; init; }
-    public required string UpdateFeed { get; init; }
     public required string ShortcutsHint { get; init; }
     public required string Save { get; init; }
     public required string Language { get; init; }
@@ -108,9 +106,6 @@ public sealed record UiStrings
     public required string MarkHdmi { get; init; }
     public required string MarkSpeakers { get; init; }
     public required string MarkAuto { get; init; }
-    public required string UpdateDisabled { get; init; }
-    public required string UpdateInvalidFeed { get; init; }
-    public required string UpdateNotInstalled { get; init; }
     public required string UpdateLatest { get; init; }
     public required string UpdateAvailable { get; init; }
     public required string UpdateFailed { get; init; }
@@ -326,7 +321,6 @@ public sealed record UiStrings
         RegisterDefault = "注册为当前用户的默认播放器（常见视频格式）",
         ImportMpvConf = "导入 mpv.conf…",
         AmpWizard = "功放 / 回音壁向导…",
-        UpdateFeedPlaceholder = "更新源 URL（可选）",
         CheckUpdates = "检查更新",
         Version = "版本  {0}",
         PictureQuality = "画面质量",
@@ -335,7 +329,6 @@ public sealed record UiStrings
         QualityHigh = "高质量",
         SubEncoding = "字幕编码",
         AssOverride = "ASS 样式覆盖",
-        UpdateFeed = "更新源",
         ShortcutsHint = "[ ] 倍速　　Z / X 字幕延迟　　滚轮音量　　双击全屏　　P 画中画",
         Save = "保存",
         Language = "语言",
@@ -361,11 +354,8 @@ public sealed record UiStrings
         MarkHdmi = "HDMI  ",
         MarkSpeakers = "扬声器  ",
         MarkAuto = "自动  ",
-        UpdateDisabled = "未配置更新源。便携版请重新下载 zip；安装包在配置 HTTPS 源后再检查。",
-        UpdateInvalidFeed = "更新源必须是 http 或 https URL。",
-        UpdateNotInstalled = "当前不是安装包布局，无法自动更新。请下载新的便携版。  当前 {0}",
         UpdateLatest = "已是最新版本  {0}",
-        UpdateAvailable = "发现 {0}（当前 {1}）。安装包下次启动可应用更新。",
+        UpdateAvailable = "发现新版本 {0}（当前 {1}），请到 {2} 下载。",
         UpdateFailed = "检查失败：{0}",
         ImportApplied = "已应用 {0} 项",
         ImportRejected = "已应用 {0} 项，拒绝 {1} 项（结构性/未知选项）",
@@ -580,7 +570,6 @@ public sealed record UiStrings
         RegisterDefault = "Register as this user's default player (common video types)",
         ImportMpvConf = "Import mpv.conf…",
         AmpWizard = "AVR / soundbar wizard…",
-        UpdateFeedPlaceholder = "Update feed URL (optional)",
         CheckUpdates = "Check for updates",
         Version = "Version  {0}",
         PictureQuality = "Picture quality",
@@ -589,7 +578,6 @@ public sealed record UiStrings
         QualityHigh = "High",
         SubEncoding = "Subtitle encoding",
         AssOverride = "ASS style override",
-        UpdateFeed = "Update feed",
         ShortcutsHint = "[ ] speed    Z / X sub delay    wheel volume    double-click full screen    P picture-in-picture",
         Save = "Save",
         Language = "Language",
@@ -615,11 +603,8 @@ public sealed record UiStrings
         MarkHdmi = "HDMI  ",
         MarkSpeakers = "Speakers  ",
         MarkAuto = "Auto  ",
-        UpdateDisabled = "No update feed. For the portable zip, download a new one; installers need an HTTPS feed.",
-        UpdateInvalidFeed = "The update feed must be an http or https URL.",
-        UpdateNotInstalled = "This is not an installed layout, so auto-update cannot apply. Download a new portable zip.  Current {0}",
         UpdateLatest = "Up to date  {0}",
-        UpdateAvailable = "Found {0} (current {1}). The installer can apply it on the next launch.",
+        UpdateAvailable = "Found {0} (current {1}). Download it from {2}.",
         UpdateFailed = "Check failed: {0}",
         ImportApplied = "Applied {0} option(s)",
         ImportRejected = "Applied {0} option(s), rejected {1} (structural/unknown)",

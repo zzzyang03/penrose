@@ -5284,16 +5284,19 @@ public sealed partial class MainWindow : Window
 
             await ShowAmpWizardAsync().ConfigureAwait(true);
         };
-        TextBox feed = new()
-        {
-            Text = _settings.UpdateFeedUrl ?? "",
-            PlaceholderText = _ui.UpdateFeedPlaceholder,
-        };
         Button checkUpdates = new() { Content = _ui.CheckUpdates };
         TextBlock updateStatus = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap };
         checkUpdates.Click += async (_, _) =>
         {
-            updateStatus.Text = await CheckUpdatesAsync(feed.Text).ConfigureAwait(true);
+            checkUpdates.IsEnabled = false;
+            try
+            {
+                updateStatus.Text = await CheckUpdatesAsync().ConfigureAwait(true);
+            }
+            finally
+            {
+                checkUpdates.IsEnabled = true;
+            }
         };
         StackPanel advancedActions = new() { Orientation = Orientation.Horizontal, Spacing = 8 };
         advancedActions.Children.Add(importConf);
@@ -5303,7 +5306,6 @@ public sealed partial class MainWindow : Window
         updateActions.Children.Add(checkUpdates);
         updateActions.Children.Add(updateStatus);
         updateStatus.VerticalAlignment = VerticalAlignment.Center;
-        feed.Header = _ui.UpdateFeed;
 
         host.Children.Clear();
         host.Children.Add(SettingsSection(
@@ -5331,7 +5333,6 @@ public sealed partial class MainWindow : Window
             SettingsBlock(advancedActions)));
         host.Children.Add(SettingsSection(
             string.Format(System.Globalization.CultureInfo.InvariantCulture, _ui.Version, AppVersion.Display),
-            SettingsBlock(feed),
             SettingsBlock(updateActions),
             SettingsBlock(new TextBlock
             {
@@ -5353,7 +5354,6 @@ public sealed partial class MainWindow : Window
             Language = language,
             Encoding = encoding,
             Ass = ass,
-            Feed = feed,
         };
     }
 
@@ -5374,7 +5374,6 @@ public sealed partial class MainWindow : Window
             },
             SubCodepage = page.Encoding.SelectedItem as string ?? "auto",
             SubAssOverride = page.Ass.SelectedItem as string ?? "no",
-            UpdateFeedUrl = string.IsNullOrWhiteSpace(page.Feed.Text) ? null : page.Feed.Text.Trim(),
             Language = page.Language.SelectedIndex == 1 ? "en" : "zh-CN",
             FullscreenProgressLine = page.ProgressLine.IsOn,
         };
@@ -5622,39 +5621,38 @@ public sealed partial class MainWindow : Window
         return slash > 0 ? _ui.DevicePinned : device;
     }
 
-    private async Task<string> CheckUpdatesAsync(string? feedUrl)
+    /// <summary>
+    /// Asks GitHub Releases for the latest tag and reports it. Only run when the user clicks
+    /// the button; the app never applies updates itself.
+    /// </summary>
+    private async Task<string> CheckUpdatesAsync()
     {
         string current = AppVersion.Display;
-        UpdateDecision feed = AppRelease.ForFeed(current, feedUrl);
-        if (feed.Status == UpdateStatus.Disabled)
-        {
-            return _ui.UpdateDisabled;
-        }
-
-        if (feed.Status == UpdateStatus.InvalidFeed)
-        {
-            return _ui.UpdateInvalidFeed;
-        }
-
         try
         {
-            Velopack.UpdateManager manager = new(feedUrl!.Trim());
-            if (!manager.IsInstalled)
+            using HttpClient http = new() { Timeout = TimeSpan.FromSeconds(15) };
+            http.DefaultRequestHeaders.UserAgent.ParseAdd(AppVersion.Name + "/" + current);
+            http.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
+            string json = await http.GetStringAsync(new Uri(AppRelease.LatestReleaseApi)).ConfigureAwait(true);
+            if (!AppRelease.TryReadTag(json, out string tag))
             {
-                return string.Format(System.Globalization.CultureInfo.InvariantCulture, _ui.UpdateNotInstalled, current);
+                Log.Warning("Update check: no tag_name in the release document");
+                return string.Format(System.Globalization.CultureInfo.InvariantCulture, _ui.UpdateFailed, AppRelease.LatestReleaseApi);
             }
 
-            Velopack.UpdateInfo? info = await manager.CheckForUpdatesAsync().ConfigureAwait(true);
-            if (info is null)
+            UpdateDecision compared = AppRelease.CompareRemote(current, tag);
+            Log.Information("Update check: latest {Tag}, current {Current}, {Status}", tag, current, compared.Status);
+            return compared.Status switch
             {
-                return string.Format(System.Globalization.CultureInfo.InvariantCulture, _ui.UpdateLatest, current);
-            }
-
-            string remote = info.TargetFullRelease.Version.ToString();
-            UpdateDecision compared = AppRelease.CompareRemote(current, remote);
-            return compared.Status == UpdateStatus.Available
-                ? string.Format(System.Globalization.CultureInfo.InvariantCulture, _ui.UpdateAvailable, remote, current)
-                : string.Format(System.Globalization.CultureInfo.InvariantCulture, _ui.UpdateLatest, current);
+                UpdateStatus.Available => string.Format(
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    _ui.UpdateAvailable,
+                    compared.Remote,
+                    current,
+                    AppRelease.LatestReleasePage),
+                UpdateStatus.UpToDate => string.Format(System.Globalization.CultureInfo.InvariantCulture, _ui.UpdateLatest, current),
+                _ => string.Format(System.Globalization.CultureInfo.InvariantCulture, _ui.UpdateFailed, tag),
+            };
         }
         catch (Exception ex)
         {

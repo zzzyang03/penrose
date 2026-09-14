@@ -23,8 +23,6 @@ public sealed record SimpleSettings
     public double SubDelaySeconds { get; init; }
     public string SubCodepage { get; init; } = "auto";
     public string SubAssOverride { get; init; } = "no";
-    /// <summary>Velopack / HTTP feed. Null disables update checks.</summary>
-    public string? UpdateFeedUrl { get; init; }
     /// <summary>
     /// Pre-multi-server field, kept only so older settings files still load; the
     /// serializer moves it into <see cref="Servers"/>. Always null after loading.

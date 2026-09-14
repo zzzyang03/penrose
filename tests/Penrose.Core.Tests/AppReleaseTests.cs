@@ -23,20 +23,33 @@ public sealed class AppReleaseTests
     }
 
     [Fact]
-    public void Feed_must_be_http_or_https()
+    public void Reads_tag_from_github_release_document()
     {
-        Assert.Equal(UpdateStatus.Disabled, AppRelease.ForFeed("0.1.0", null).Status);
-        Assert.Equal(UpdateStatus.Disabled, AppRelease.ForFeed("0.1.0", "  ").Status);
-        Assert.Equal(UpdateStatus.InvalidFeed, AppRelease.ForFeed("0.1.0", "ftp://example/updates").Status);
-        Assert.Equal(UpdateStatus.InvalidFeed, AppRelease.ForFeed("0.1.0", "not-a-url").Status);
-        Assert.Equal(UpdateStatus.ReadyToQuery, AppRelease.ForFeed("0.1.0", "https://example.invalid/updates").Status);
+        const string json = """{"url":"https://api.github.com/repos/zzzyang03/penrose/releases/1","tag_name":"v0.2.0","name":"Penrose 0.2.0","draft":false}""";
+        Assert.True(AppRelease.TryReadTag(json, out string tag));
+        Assert.Equal("v0.2.0", tag);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("not json")]
+    [InlineData("[]")]
+    [InlineData("""{"message":"Not Found"}""")]
+    [InlineData("""{"tag_name":42}""")]
+    [InlineData("""{"tag_name":" "}""")]
+    public void Rejects_documents_without_a_tag(string? json)
+    {
+        Assert.False(AppRelease.TryReadTag(json, out string tag));
+        Assert.Equal("", tag);
     }
 
     [Fact]
     public void Remote_newer_is_available()
     {
-        Assert.Equal(UpdateStatus.Available, AppRelease.CompareRemote("0.1.0", "0.2.0").Status);
+        Assert.Equal(UpdateStatus.Available, AppRelease.CompareRemote("0.1.0", "v0.2.0").Status);
         Assert.Equal(UpdateStatus.UpToDate, AppRelease.CompareRemote("0.2.0", "0.2.0").Status);
         Assert.Equal(UpdateStatus.UpToDate, AppRelease.CompareRemote("0.2.0", "0.1.0").Status);
+        Assert.Equal(UpdateStatus.InvalidVersion, AppRelease.CompareRemote("0.2.0", "latest").Status);
     }
 }
