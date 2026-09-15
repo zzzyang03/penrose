@@ -1,4 +1,5 @@
 using Penrose.Core.Playback;
+using Penrose.Core.Ui;
 
 namespace Penrose.Core.Tests;
 
@@ -127,5 +128,101 @@ public sealed class FormatBadgesTests
         Assert.Equal("Dolby TrueHD + Dolby Atmos", audio.CodecProfile);
         Assert.Equal(8, audio.Channels);
         Assert.Equal("7.1", audio.ChannelLayout);
+    }
+
+    [Theory]
+    [InlineData("eac3", "Dolby Digital Plus + Dolby Atmos", "Dolby Atmos")]
+    [InlineData("eac3", "E-AC3", "E-AC3 (Dolby Digital Plus)")]
+    [InlineData("eac3", "E-AC3+ATMOS", "Dolby Atmos")]
+    [InlineData("ac3", "AC-3", "Dolby Digital")]
+    [InlineData("ac3", "Dolby Digital", "Dolby Digital")]
+    [InlineData("truehd", "Dolby TrueHD + Dolby Atmos", "Dolby Atmos")]
+    [InlineData("truehd", "Dolby TrueHD", "Dolby TrueHD")]
+    [InlineData("truehd", "TrueHD", "Dolby TrueHD")]
+    [InlineData("dts", "DTS-HD MA", "DTS-HD MA")]
+    [InlineData("dts", "DTS-HD Master Audio", "DTS-HD MA")]
+    [InlineData("dts", "DTS-HD", "DTS-HD")]
+    [InlineData("dts", "DTS-HD MA + DTS:X", "DTS:X")]
+    [InlineData("dts", "DTS:X", "DTS:X")]
+    [InlineData("dts", "DTS:X MA", "DTS:X")]
+    [InlineData("dts", "DTS", "DTS")]
+    [InlineData("aac", null, "AAC")]
+    [InlineData("aac", "LC", "AAC")]
+    [InlineData("aac", "HE-AAC", "AAC")]
+    [InlineData("opus", null, "Opus")]
+    [InlineData("flac", null, "FLAC")]
+    [InlineData("mp3", null, "MP3")]
+    [InlineData("vorbis", null, "Vorbis")]
+    [InlineData("pcm_s16le", null, "PCM")]
+    [InlineData("pcm_s24le", null, "PCM")]
+    [InlineData("pcm_f32le", null, "PCM")]
+    [InlineData("hevc", "Main 10", "hevc")]
+    [InlineData("av1", null, "av1")]
+    [InlineData("h264", "High", "h264")]
+    [InlineData("", null, "")]
+    [InlineData("ac3", "Dolby Digital Plus", "Dolby Digital Plus")]
+    [InlineData(null, "Dolby Digital Plus", "Dolby Digital Plus")]
+    [InlineData("unknowncodec", "", "unknowncodec")]
+    [InlineData("opus", "opus", "Opus")]
+    public void CodecProfileLabel_returns_human_readable_name(string codec, string? profile, string expected)
+    {
+        Assert.Equal(expected, FormatBadges.CodecProfileLabel(codec, profile));
+    }
+
+    [Theory]
+    [InlineData(null, "—")]
+    [InlineData(0L, "—")]
+    [InlineData(-100L, "—")]
+    [InlineData(999L, "999 bps")]
+    [InlineData(1000L, "1 kbps")]
+    [InlineData(640000L, "640 kbps")]
+    [InlineData(1000000L, "1 Mbps")]
+    [InlineData(18400000L, "18.4 Mbps")]
+    [InlineData(18400000000L, "18400 Mbps")]
+    public void FormatBitrate_formats_correctly(long? bps, string expected)
+    {
+        Assert.Equal(expected, InfoFormatters.FormatBitrate(bps));
+    }
+
+    [Theory]
+    [InlineData(null, "—")]
+    [InlineData(0L, "—")]
+    [InlineData(-100L, "—")]
+    [InlineData(512L, "512 B")]
+    [InlineData(1024L, "1 KiB")]
+    [InlineData(921L, "921 B")]
+    [InlineData(1048576L, "1 MiB")]
+    [InlineData(4600000000L, "4.28 GiB")]
+    [InlineData(2147483648L, "2 GiB")]
+    [InlineData(2199023255552L, "2 TiB")]
+    public void FormatBytes_formats_correctly(long? bytes, string expected)
+    {
+        Assert.Equal(expected, InfoFormatters.FormatBytes(bytes));
+    }
+
+    [Theory]
+    [InlineData(null, "—")]
+    [InlineData("", "—")]
+    [InlineData("  ", "—")]
+    [InlineData("matroska,webm", "matroska")]
+    [InlineData("mov,mp4,m4a,3gp,3g2,mj2", "mov")]
+    [InlineData("matroska", "matroska")]
+    [InlineData("mpegts", "mpegts")]
+    [InlineData("ogg", "ogg")]
+    [InlineData("aac", "aac")]
+    public void ShortContainer_returns_first_token(string? raw, string expected)
+    {
+        Assert.Equal(expected, InfoFormatters.ShortContainer(raw));
+    }
+
+    [Theory]
+    [InlineData("matroska,webm", "matroska")]
+    [InlineData("mov,mp4,m4a", "mov")]
+    [InlineData("mpegts", "mpegts")]
+    [InlineData(null, "—")]
+    [InlineData("", "—")]
+    public void ContainerLabel_includes_short_form(string? raw, string expected)
+    {
+        Assert.Equal(expected, InfoFormatters.ContainerLabel(raw));
     }
 }
