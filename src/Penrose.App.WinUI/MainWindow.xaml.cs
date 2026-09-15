@@ -1443,6 +1443,7 @@ public sealed partial class MainWindow : Window
             _currentSourceKind = request.SourceKind;
             _progressKey = progressKey;
             HideError();
+            await ResetAudioDelayAsync().ConfigureAwait(true);
             PlaybackSnapshot loaded = await _engine.LoadAsync(request).ConfigureAwait(true);
             Log.Information(
                 "Play: loaded {Name} generation={Generation} duration={Duration} start={Start}",
@@ -1843,6 +1844,36 @@ public sealed partial class MainWindow : Window
             };
             night.Click += async (_, _) => await ToggleNightAsync().ConfigureAwait(true);
             flyout.Items.Add(night);
+
+            // Per-file A/V sync: the header shows the current offset, the steps show their shortcuts.
+            double delay = await ReadAudioDelayAsync().ConfigureAwait(true);
+            string step = AudioDelay.StepMilliseconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            flyout.Items.Add(new MenuFlyoutSeparator());
+            flyout.Items.Add(new MenuFlyoutItem
+            {
+                Text = string.Format(
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    _ui.AudioDelayOsd,
+                    AudioDelay.FormatMilliseconds(delay)),
+                IsEnabled = false,
+            });
+            MenuFlyoutItem earlier = new()
+            {
+                Text = string.Format(System.Globalization.CultureInfo.InvariantCulture, _ui.AudioDelayEarlier, step),
+                KeyboardAcceleratorTextOverride = "Ctrl+-",
+            };
+            earlier.Click += async (_, _) => await NudgeAudioDelayAsync(-AudioDelay.Step).ConfigureAwait(true);
+            flyout.Items.Add(earlier);
+            MenuFlyoutItem later = new()
+            {
+                Text = string.Format(System.Globalization.CultureInfo.InvariantCulture, _ui.AudioDelayLater, step),
+                KeyboardAcceleratorTextOverride = "Ctrl+=",
+            };
+            later.Click += async (_, _) => await NudgeAudioDelayAsync(AudioDelay.Step).ConfigureAwait(true);
+            flyout.Items.Add(later);
+            MenuFlyoutItem reset = new() { Text = _ui.AudioDelayReset, IsEnabled = delay != 0 };
+            reset.Click += async (_, _) => await SetAudioDelayAsync(0).ConfigureAwait(true);
+            flyout.Items.Add(reset);
         }
 
         flyout.ShowAt(button);
@@ -3635,13 +3666,29 @@ public sealed partial class MainWindow : Window
         RestartHideTimer();
         if (HasModifier())
         {
-            // Ctrl+, opens settings (the Windows convention); other Ctrl/Alt/Win
-            // combinations are not player shortcuts (Ctrl+A in a text box must not
-            // cycle audio tracks).
-            if (e.Key == (Windows.System.VirtualKey)0xBC && IsKeyDown(Windows.System.VirtualKey.Control))
+            // Ctrl+, opens settings (the Windows convention) and Ctrl+- / Ctrl+= (or the
+            // numpad - / +) shift the sound against the picture, as in mpv. Other
+            // Ctrl/Alt/Win combinations are not player shortcuts (Ctrl+A in a text box
+            // must not cycle audio tracks).
+            if (IsKeyDown(Windows.System.VirtualKey.Control))
             {
-                e.Handled = true;
-                OpenSettings();
+                switch (e.Key)
+                {
+                    case (Windows.System.VirtualKey)0xBC:
+                        e.Handled = true;
+                        OpenSettings();
+                        break;
+                    case (Windows.System.VirtualKey)0xBD:
+                    case Windows.System.VirtualKey.Subtract:
+                        e.Handled = true;
+                        await NudgeAudioDelayAsync(-AudioDelay.Step).ConfigureAwait(true);
+                        break;
+                    case (Windows.System.VirtualKey)0xBB:
+                    case Windows.System.VirtualKey.Add:
+                        e.Handled = true;
+                        await NudgeAudioDelayAsync(AudioDelay.Step).ConfigureAwait(true);
+                        break;
+                }
             }
 
             return;
@@ -4014,6 +4061,51 @@ public sealed partial class MainWindow : Window
             _ui.SubDelayOsd,
             _subDelay.ToString("+0.0;-0.0;0", System.Globalization.CultureInfo.InvariantCulture)));
     }
+
+    /// <summary>
+    /// Shifts the sound against the picture for the current file only; the next load
+    /// resets it (<see cref="ResetAudioDelayAsync"/>). Starts from mpv's value, so an
+    /// <c>audio-delay</c> imported from mpv.conf is the base of the step.
+    /// </summary>
+    private async Task NudgeAudioDelayAsync(double delta)
+    {
+        if (_engine is null)
+        {
+            return;
+        }
+
+        double current = await ReadAudioDelayAsync().ConfigureAwait(true);
+        await SetAudioDelayAsync(AudioDelay.Nudge(current, delta)).ConfigureAwait(true);
+    }
+
+    private async Task SetAudioDelayAsync(double seconds)
+    {
+        if (_engine is null)
+        {
+            return;
+        }
+
+        await _engine.ApplyPropertiesAsync(new Dictionary<string, string>
+        {
+            ["audio-delay"] = AudioDelay.ToProperty(seconds),
+        }).ConfigureAwait(true);
+        ShowOsd(string.Format(
+            System.Globalization.CultureInfo.InvariantCulture,
+            _ui.AudioDelayOsd,
+            AudioDelay.FormatMilliseconds(seconds)));
+    }
+
+    private async Task<double> ReadAudioDelayAsync() =>
+        _engine is null
+            ? 0
+            : AudioDelay.Parse(await _engine.GetPropertyStringAsync("audio-delay").ConfigureAwait(true));
+
+    /// <summary>Audio delay is per file: every load starts in sync, whatever the previous file needed.</summary>
+    private Task ResetAudioDelayAsync() =>
+        ApplySettingGroupAsync("audio delay", () => _engine!.ApplyPropertiesAsync(new Dictionary<string, string>
+        {
+            ["audio-delay"] = "0",
+        }));
 
     private async Task ApplySpeedAsync(bool save = true)
     {
@@ -5114,6 +5206,7 @@ public sealed partial class MainWindow : Window
             _currentLibraryItem = item;
             _libraryQueue = queue ?? _libraryQueue;
             HideError();
+            await ResetAudioDelayAsync().ConfigureAwait(true);
             // No warm-up here: measured on a cloud-backed Emby, a parallel range
             // request only queues behind mpv's own and makes the open slower. The
             // next episode is warmed ahead of time instead (PrefetchNextEpisodeAsync).

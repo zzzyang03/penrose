@@ -62,6 +62,7 @@
 - 输出模式：系统默认、强制立体声、家庭影院 PCM（5.1 / 7.1）；独立的“音频直通”开关把 AC3 / E-AC3 / DTS / TrueHD 以 WASAPI 独占位流交给功放解码（失败时自动回退 PCM 并提示）
 - 通过 HDMI 连接功放和回音壁的设置向导
 - 声道布局（下混）选择与夜间模式（动态范围压缩）
+- 音频延迟调节：声音每次提前或推后 50 毫秒，修正音画不同步；只对当前文件生效
 
 **Emby**
 
@@ -90,6 +91,7 @@ Jellyfin 支持仍在开发中：已能解析播放信息，但应用暂时还�
 | `Page Up` / `Page Down` | 上一个 / 下一个 |
 | `[` / `]` | 减速 / 加速（每次 0.25×） |
 | `Z` / `X` | 字幕延迟 −0.1 秒 / +0.1 秒 |
+| `Ctrl` + `-` / `Ctrl` + `=` | 音频延迟 −0.05 秒 / +0.05 秒（打开下一个文件时归零） |
 | `A` / `S` | 切换音轨 / 字幕 |
 | `F`、双击 | 全屏 |
 | `T` | 顶层全屏（HDR10 输出） |
@@ -232,6 +234,7 @@ They are not code-signed yet: if SmartScreen warns on first launch, choose **Mor
 - Output modes: system default, forced stereo, home-theater PCM (5.1 / 7.1); a separate audio passthrough toggle sends AC3 / E-AC3 / DTS / TrueHD as a WASAPI exclusive bitstream for the receiver to decode, with automatic PCM fallback and a prompt
 - Setup wizard for AV receivers and soundbars over HDMI
 - Channel layout (downmix) picker and night mode (dynamic range compression)
+- Audio delay: move the sound 50 ms earlier or later per step to fix audio/video sync, for the current file only
 
 **Emby**
 
@@ -265,6 +268,7 @@ Jellyfin support is in progress: playback-info parsing exists, but the app canno
 | `Page Up` / `Page Down` | Previous / next item |
 | `[` / `]` | Slower / faster (0.25× steps) |
 | `Z` / `X` | Subtitle delay −0.1 s / +0.1 s |
+| `Ctrl` + `-` / `Ctrl` + `=` | Audio delay −0.05 s / +0.05 s (resets for the next file) |
 | `A` / `S` | Cycle audio / subtitle track |
 | `F`, double-click | Full screen |
 | `T` | Top-level full screen (HDR10 output) |
