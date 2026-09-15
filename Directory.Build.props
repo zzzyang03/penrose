@@ -14,7 +14,7 @@
     <NuGetAudit>true</NuGetAudit>
     <NuGetAuditMode>all</NuGetAuditMode>
     <RepoRoot>$(MSBuildThisFileDirectory)</RepoRoot>
-    <Version>0.1.1</Version>
+    <Version>0.2.0</Version>
     <Product>Penrose</Product>
     <Authors>Zhehao Yang</Authors>
     <Copyright>Copyright (C) 2026 Zhehao Yang</Copyright>
