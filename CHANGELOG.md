@@ -9,8 +9,6 @@ Simplified Chinese first, then in English.
 
 ## [Unreleased]
 
-## [0.2.0] - 2026-09-15
-
 ### 新增
 
 - 播放信息面板重新组织为 5 个区块：播放类型（本地 / strm / 服务器直连 / 服务器转码等）、媒体源（封装格式、大小、完整地址）、视频（编码、动态范围、分辨率、帧率、码率）、音频（编码、声道、采样率、码率）、输出。视频和音频码率、帧率在面板打开时以 1 Hz 实时刷新。
@@ -25,7 +23,6 @@ Simplified Chinese first, then in English.
 ### 修复
 
 - 窗口失去焦点时不再把 HDR（scRGB）输出切换为 SDR。此前每次切换窗口都会重建交换链，造成短暂黑屏和卡顿；现在窗口在后台时继续以 HDR 播放。
-- README 新增“AI 协作准则”段落，明确仓库的 AI 工具使用规则：所有 commit 必须以自然人 author 提交，AI 协助部分必须在 PR 描述中声明，合并前必须由人工 review。
 
 ### Added
 
@@ -58,9 +55,6 @@ Simplified Chinese first, then in English.
 - Losing window focus no longer switches HDR (scRGB) output to SDR. Every focus
   change used to rebuild the swap chain, causing a brief black screen and stutter;
   playback now stays in HDR while the window is in the background.
-- README adds an "AI-assisted contributions" section that codifies the AI tool
-  policy: every commit must be human-authored, AI-assisted code must be declared
-  in the PR description, and human review is required before merge.
 
 ## [0.1.1] - 2026-09-14
 
@@ -123,7 +117,6 @@ First public preview.
   Simplified Chinese UI, and a diagnostics export that redacts secrets.
 - Self-contained portable zip and Velopack installer for Windows x64.
 
-[Unreleased]: https://github.com/zzzyang03/penrose/compare/v0.2.0...HEAD
-[0.2.0]: https://github.com/zzzyang03/penrose/compare/v0.1.1...v0.2.0
+[Unreleased]: https://github.com/zzzyang03/penrose/compare/v0.1.1...HEAD
 [0.1.1]: https://github.com/zzzyang03/penrose/releases/tag/v0.1.1
 [0.1.0]: https://github.com/zzzyang03/penrose/releases/tag/v0.1.0
