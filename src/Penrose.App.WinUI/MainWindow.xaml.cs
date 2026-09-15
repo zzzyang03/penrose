@@ -42,14 +42,6 @@ namespace Penrose.App.WinUI;
 
 public sealed partial class MainWindow : Window
 {
-    private static readonly AudioPolicy[] AudioPolicies =
-    [
-        AudioPolicy.SystemCompatible,
-        AudioPolicy.ForceStereo,
-        AudioPolicy.HomeTheaterPcm,
-        AudioPolicy.Bitstream,
-    ];
-
     private readonly DispatcherTimer _hideTimer;
     private readonly DispatcherTimer _progressTimer;
     private readonly DispatcherTimer _osdTimer;
@@ -78,6 +70,8 @@ public sealed partial class MainWindow : Window
     private bool _audioPolicyReady;
     private bool _suppressPlaylistAdvance;
     private bool _bitstreamFallback;
+    /// <summary>The current track really leaves the AO as IEC61937 (spdif), not PCM.</summary>
+    private bool _spdifActive;
     private bool _wantFullscreen;
     private bool _topLevelAutomatic;
     private bool _borderlessMaximize;
@@ -1337,7 +1331,7 @@ public sealed partial class MainWindow : Window
 
             string? hwdec = await _engine.GetPropertyStringAsync("hwdec-current").ConfigureAwait(true);
             PlaybackCapabilitySnapshot caps = DeviceProfileBuilder.FromRuntime(
-                _audioPolicy, _settings.AudioDevice, DisplayIsAdvancedColor(), hwdec, _surface?.CurrentDisplay?.AdapterLuid);
+                _audioPolicy, _settings.AudioPassthrough, _settings.AudioDevice, DisplayIsAdvancedColor(), hwdec, _surface?.CurrentDisplay?.AdapterLuid);
             System.Diagnostics.Stopwatch clock = System.Diagnostics.Stopwatch.StartNew();
             PlaybackCandidate candidate = await _embyResolver.ResolveAsync(next.Id, caps).ConfigureAwait(true);
             long resolved = clock.ElapsedMilliseconds;
@@ -1442,7 +1436,6 @@ public sealed partial class MainWindow : Window
                 await _surface.AttachAsync().ConfigureAwait(true);
             }
 
-            await CheckBitstreamAsync().ConfigureAwait(true);
             _ = ShowFormatBadgesAsync();
             await RefreshChaptersAsync().ConfigureAwait(true);
             await MaybePickDiscTitleAsync(path).ConfigureAwait(true);
@@ -1788,8 +1781,8 @@ public sealed partial class MainWindow : Window
 
         if (type == "audio")
         {
-            // Output policy and night mode live with the audio tracks instead of
-            // taking permanent space in the transport bar.
+            // Output policy, passthrough and night mode live with the audio tracks
+            // instead of taking permanent space in the transport bar.
             flyout.Items.Add(new MenuFlyoutSeparator());
             flyout.Items.Add(new MenuFlyoutItem { Text = _ui.AudioOutput, IsEnabled = false });
             (AudioPolicy Policy, string Label)[] policies =
@@ -1797,7 +1790,6 @@ public sealed partial class MainWindow : Window
                 (AudioPolicy.SystemCompatible, _ui.AudioSystem),
                 (AudioPolicy.ForceStereo, _ui.AudioStereo),
                 (AudioPolicy.HomeTheaterPcm, _ui.AudioHomePcm),
-                (AudioPolicy.Bitstream, _ui.AudioBitstream),
             ];
             foreach ((AudioPolicy policy, string label) in policies)
             {
@@ -1812,11 +1804,18 @@ public sealed partial class MainWindow : Window
             }
 
             flyout.Items.Add(new MenuFlyoutSeparator());
+            ToggleMenuFlyoutItem passthrough = new()
+            {
+                Text = _ui.AudioPassthrough,
+                IsChecked = _settings.AudioPassthrough,
+            };
+            passthrough.Click += async (_, _) => await TogglePassthroughAsync().ConfigureAwait(true);
+            flyout.Items.Add(passthrough);
             ToggleMenuFlyoutItem night = new()
             {
                 Text = _ui.Night,
                 IsChecked = _night,
-                IsEnabled = _audioPolicy != AudioPolicy.Bitstream,
+                IsEnabled = !_settings.AudioPassthrough,
                 Icon = new FontIcon { Glyph = "\uE708" },
             };
             night.Click += async (_, _) => await ToggleNightAsync().ConfigureAwait(true);
@@ -2199,12 +2198,14 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        _night = !_night;
-        if (_night && _audioPolicy == AudioPolicy.Bitstream)
+        if (_settings.AudioPassthrough)
         {
-            _audioPolicy = AudioPolicy.SystemCompatible;
+            // The flyout greys the item out; only the N key reaches here.
+            ShowOsd(_ui.NightBlockedByPassthrough);
+            return;
         }
 
+        _night = !_night;
         await ApplyPlaybackPolicyAsync().ConfigureAwait(true);
         ShowOsd(_night ? _ui.Night + "  ✓" : _ui.Night + "  ✕");
     }
@@ -2218,11 +2219,38 @@ public sealed partial class MainWindow : Window
 
         _audioPolicy = next;
         await ApplyPlaybackPolicyAsync().ConfigureAwait(true);
-        await CheckBitstreamAsync().ConfigureAwait(true);
-        await RefreshStatusAsync().ConfigureAwait(true);
+        await SettleAudioAsync().ConfigureAwait(true);
+        ShowOsd(AudioPolicyLabel(next));
+    }
+
+    private async Task TogglePassthroughAsync()
+    {
+        if (!_audioPolicyReady || _engine is null)
+        {
+            return;
+        }
+
+        _settings = _settings with { AudioPassthrough = !_settings.AudioPassthrough };
+        await ApplyPassthroughChangedAsync().ConfigureAwait(true);
+        ShowOsd(_ui.AudioPassthrough + (_settings.AudioPassthrough ? "  ✓" : "  ✕"));
+    }
+
+    /// <summary>Pushes a changed <see cref="SimpleSettings.AudioPassthrough"/> to mpv and reads the chain back.</summary>
+    private async Task ApplyPassthroughChangedAsync()
+    {
+        await ApplyPlaybackPolicyAsync().ConfigureAwait(true);
+        await SettleAudioAsync().ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// audio-* changes reinit the AO asynchronously; output params read straight
+    /// after the property set are stale, so wait before refreshing the chips.
+    /// </summary>
+    private async Task SettleAudioAsync()
+    {
         await Task.Delay(350).ConfigureAwait(true);
         await RefreshChannelsAsync().ConfigureAwait(true);
-        ShowOsd(AudioPolicyLabel(next));
+        await RefreshStatusAsync().ConfigureAwait(true);
     }
 
     private string AudioPolicyLabel(AudioPolicy policy) =>
@@ -2230,7 +2258,6 @@ public sealed partial class MainWindow : Window
         {
             AudioPolicy.ForceStereo => _ui.AudioStereo,
             AudioPolicy.HomeTheaterPcm => _ui.AudioHomePcm,
-            AudioPolicy.Bitstream => _bitstreamFallback ? _ui.AudioBitstreamPcm : _ui.AudioBitstream,
             _ => _ui.AudioSystem,
         };
 
@@ -2242,6 +2269,7 @@ public sealed partial class MainWindow : Window
     private async Task RefreshChannelsAsync()
     {
         RefreshHdrChip();
+        await RefreshPassthroughStateAsync().ConfigureAwait(true);
         if (_engine is null || _engine.Snapshot.MediaPhase is MediaPhase.Empty or MediaPhase.Failed)
         {
             ChannelsText.Text = "\u2014";
@@ -2249,11 +2277,22 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        string? source = await _engine.GetPropertyStringAsync("audio-params/hr-channels").ConfigureAwait(true);
-        string? sourceCount = await _engine.GetPropertyStringAsync("audio-params/channel-count").ConfigureAwait(true);
-        string? output = await _engine.GetPropertyStringAsync("audio-out-params/hr-channels").ConfigureAwait(true);
-        string? outputCount = await _engine.GetPropertyStringAsync("audio-out-params/channel-count").ConfigureAwait(true);
-        string? label = ChannelLayouts.Describe(source, ParseInt(sourceCount), output, ParseInt(outputCount));
+        string? label;
+        if (_spdifActive)
+        {
+            // spdif frames report the IEC61937 carrier layout (2 ch for AC3, 8 for
+            // TrueHD), not what the receiver decodes, so "5.1 → 2.0" would mislead.
+            label = _ui.AudioBitstream;
+        }
+        else
+        {
+            string? source = await _engine.GetPropertyStringAsync("audio-params/hr-channels").ConfigureAwait(true);
+            string? sourceCount = await _engine.GetPropertyStringAsync("audio-params/channel-count").ConfigureAwait(true);
+            string? output = await _engine.GetPropertyStringAsync("audio-out-params/hr-channels").ConfigureAwait(true);
+            string? outputCount = await _engine.GetPropertyStringAsync("audio-out-params/channel-count").ConfigureAwait(true);
+            label = ChannelLayouts.Describe(source, ParseInt(sourceCount), output, ParseInt(outputCount));
+        }
+
         // Permanent while a file is loaded: "—" until the audio chain reports, or for
         // files without an audio track.
         ChannelsText.Text = label ?? "\u2014";
@@ -2290,8 +2329,10 @@ public sealed partial class MainWindow : Window
     private void ShowChannelsFlyout()
     {
         MenuFlyout flyout = new() { Placement = FlyoutPlacementMode.Top };
-        if (_audioPolicy == AudioPolicy.Bitstream)
+        if (_spdifActive)
         {
+            // Passthrough may be on while an AAC track still decodes locally; only a
+            // track that is really bitstreamed has nothing to downmix.
             flyout.Items.Add(new MenuFlyoutItem { Text = _ui.ChannelsBitstream, IsEnabled = false });
             flyout.ShowAt(ChannelsButton);
             return;
@@ -2460,27 +2501,28 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        bool passthrough = _settings.AudioPassthrough;
+        if (passthrough)
+        {
+            _night = false;
+        }
+
         PlaybackPolicyOptions policy = new PlaybackPolicyOptions
         {
             SubAssOverride = string.IsNullOrWhiteSpace(_settings.SubAssOverride)
                 ? "no"
                 : _settings.SubAssOverride,
             AudioDevice = string.IsNullOrWhiteSpace(_settings.AudioDevice) ? null : _settings.AudioDevice,
-        }.WithAudioPolicy(_audioPolicy);
-        if (_audioPolicy == AudioPolicy.Bitstream)
-        {
-            _night = false;
         }
-        else
+            .WithAudioPolicy(_audioPolicy)
+            .WithPassthrough(passthrough)
+            .WithNightMode(_night);
+        // User downmix from the transport bar overrides the policy's layout. mpv only
+        // applies audio-channels to PCM, so a bitstreamed track is unaffected.
+        if (!string.IsNullOrEmpty(_settings.AudioChannelsOverride)
+            && ChannelLayouts.IsValidOverride(_settings.AudioChannelsOverride))
         {
-            policy = policy.WithNightMode(_night);
-            // User downmix from the transport bar overrides the policy's layout;
-            // passthrough leaves decoding to the receiver, so it does not apply there.
-            if (!string.IsNullOrEmpty(_settings.AudioChannelsOverride)
-                && ChannelLayouts.IsValidOverride(_settings.AudioChannelsOverride))
-            {
-                policy = policy with { AudioChannels = _settings.AudioChannelsOverride };
-            }
+            policy = policy with { AudioChannels = _settings.AudioChannelsOverride };
         }
 
         await _engine.ApplyPropertiesAsync(policy.ToProperties()).ConfigureAwait(true);
@@ -2490,28 +2532,47 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private async Task CheckBitstreamAsync()
+    /// <summary>
+    /// Whether the current track really leaves as spdif, and whether a passthrough
+    /// codec unexpectedly came out as PCM (an AAC track decoding locally is not a
+    /// fallback). Runs from <see cref="RefreshChannelsAsync"/>, so loads, track
+    /// switches and policy changes all pass through here.
+    /// </summary>
+    private async Task RefreshPassthroughStateAsync()
     {
-        _bitstreamFallback = false;
-        HintBanner.IsOpen = false;
-        if (_engine is null
-            || _audioPolicy != AudioPolicy.Bitstream
-            || _engine.Snapshot.MediaPhase is MediaPhase.Empty or MediaPhase.Opening or MediaPhase.Failed)
+        bool spdif = false;
+        bool fallback = false;
+        string? format = null;
+        if (_engine is not null
+            && _engine.Snapshot.MediaPhase is not (MediaPhase.Empty or MediaPhase.Opening or MediaPhase.Failed))
         {
+            format = await _engine.GetPropertyStringAsync("audio-out-params/format").ConfigureAwait(true);
+            spdif = AudioPassthrough.IsSpdifFormat(format);
+            if (_settings.AudioPassthrough && !spdif && !string.IsNullOrWhiteSpace(format))
+            {
+                string? codec = await _engine.GetPropertyStringAsync("audio-codec-name").ConfigureAwait(true);
+                fallback = AudioPassthrough.IsPassthroughCodec(codec);
+            }
+        }
+
+        _spdifActive = spdif;
+        if (fallback == _bitstreamFallback)
+        {
+            // Called again after the AO settles; re-opening the banner would flicker.
             return;
         }
 
-        string? format = await _engine.GetPropertyStringAsync("audio-out-params/format").ConfigureAwait(true);
-        if (string.IsNullOrWhiteSpace(format) || AudioPassthrough.IsSpdifFormat(format))
+        _bitstreamFallback = fallback;
+        if (!fallback)
         {
+            HintBanner.IsOpen = false;
             return;
         }
 
-        _bitstreamFallback = true;
         HintBanner.Message = string.Format(
             System.Globalization.CultureInfo.InvariantCulture,
             _ui.BitstreamFallback,
-            format ?? "unknown");
+            format);
         SetName(HintBanner, HintBanner.Message);
         HintBanner.IsOpen = true;
     }
@@ -2837,7 +2898,10 @@ public sealed partial class MainWindow : Window
             ? hz.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) + " Hz"
             : "-";
         string playlist = _playlist.Count > 1 ? $"  ({_playlistIndex + 1}/{_playlist.Count})" : "";
-        string flags = (_night ? "  " + _ui.Night : "") + (_muted ? "  " + _ui.Mute : "");
+        string passthrough = _settings.AudioPassthrough
+            ? "  " + (_bitstreamFallback ? _ui.AudioBitstreamPcm : _spdifActive ? _ui.AudioBitstream : _ui.AudioPassthrough)
+            : "";
+        string flags = passthrough + (_night ? "  " + _ui.Night : "") + (_muted ? "  " + _ui.Mute : "");
         string badges = _currentBadges.Count > 0 ? "  [" + string.Join(" · ", _currentBadges) + "]" : "";
 
         StatusText.Text =
@@ -4847,6 +4911,7 @@ public sealed partial class MainWindow : Window
             string? hwdec = await _engine.GetPropertyStringAsync("hwdec-current").ConfigureAwait(true);
             PlaybackCapabilitySnapshot caps = DeviceProfileBuilder.FromRuntime(
                 _audioPolicy,
+                _settings.AudioPassthrough,
                 _settings.AudioDevice,
                 DisplayIsAdvancedColor(),
                 hwdec,
@@ -4952,7 +5017,6 @@ public sealed partial class MainWindow : Window
             }
 #endif
 
-            await CheckBitstreamAsync().ConfigureAwait(true);
             _ = ShowFormatBadgesAsync();
             await RefreshChaptersAsync().ConfigureAwait(true);
             await MaybeApplyWindowsHdrAsync().ConfigureAwait(true);
@@ -5141,8 +5205,8 @@ public sealed partial class MainWindow : Window
                 return;
             }
 
-            WriteSettingsFromPage(page);
-            await ApplySettingsEffectsAsync().ConfigureAwait(true);
+            SimpleSettings previous = WriteSettingsFromPage(page);
+            await ApplySettingsEffectsAsync(previous).ConfigureAwait(true);
         }
         finally
         {
@@ -5227,6 +5291,7 @@ public sealed partial class MainWindow : Window
         ToggleSwitch thumbs = Toggle(_settings.SeekThumbnails);
         ToggleSwitch gamepad = Toggle(_settings.GamepadEnabled);
         ToggleSwitch progressLine = Toggle(_settings.FullscreenProgressLine);
+        ToggleSwitch passthrough = Toggle(_settings.AudioPassthrough);
         ComboBox quality = new() { MinWidth = 160 };
         quality.Items.Add(_ui.QualityFast);
         quality.Items.Add(_ui.QualityBalanced);
@@ -5327,6 +5392,7 @@ public sealed partial class MainWindow : Window
             SettingsRow(_ui.AssOverride, ass)));
         host.Children.Add(SettingsSection(
             _ui.AudioOutput,
+            SettingsRow(_ui.AudioPassthrough, passthrough, _ui.AudioPassthroughHint),
             SettingsRow(_ui.AmpTitle, ampWizard)));
         host.Children.Add(SettingsSection(
             _ui.ImportMpvConf,
@@ -5350,6 +5416,7 @@ public sealed partial class MainWindow : Window
             Gamepad = gamepad,
             Associate = associate,
             ProgressLine = progressLine,
+            Passthrough = passthrough,
             Quality = quality,
             Language = language,
             Encoding = encoding,
@@ -5357,8 +5424,10 @@ public sealed partial class MainWindow : Window
         };
     }
 
-    private void WriteSettingsFromPage(SettingsPageControls page)
+    /// <summary>Returns the settings as they were before the page was written back.</summary>
+    private SimpleSettings WriteSettingsFromPage(SettingsPageControls page)
     {
+        SimpleSettings previous = _settings;
         _settings = _settings with
         {
             RememberPlaybackPosition = page.Remember.IsOn,
@@ -5376,6 +5445,7 @@ public sealed partial class MainWindow : Window
             SubAssOverride = page.Ass.SelectedItem as string ?? "no",
             Language = page.Language.SelectedIndex == 1 ? "en" : "zh-CN",
             FullscreenProgressLine = page.ProgressLine.IsOn,
+            AudioPassthrough = page.Passthrough.IsOn,
         };
         if (page.Associate.IsOn)
         {
@@ -5385,13 +5455,21 @@ public sealed partial class MainWindow : Window
         {
             FileAssociation.UnregisterCurrentUser();
         }
+
+        return previous;
     }
 
-    private async Task ApplySettingsEffectsAsync()
+    private async Task ApplySettingsEffectsAsync(SimpleSettings previous)
     {
         ApplyLanguage();
         await ApplyQualityAsync().ConfigureAwait(true);
         await ApplySubtitleStyleAsync().ConfigureAwait(true);
+        if (previous.AudioPassthrough != _settings.AudioPassthrough)
+        {
+            // Rebuilding the AO is not free; only touch audio when the toggle moved.
+            await ApplyPassthroughChangedAsync().ConfigureAwait(true);
+        }
+
         await SaveSettingsAsync().ConfigureAwait(true);
     }
 
@@ -5402,8 +5480,8 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        WriteSettingsFromPage(page);
-        await ApplySettingsEffectsAsync().ConfigureAwait(true);
+        SimpleSettings previous = WriteSettingsFromPage(page);
+        await ApplySettingsEffectsAsync(previous).ConfigureAwait(true);
     }
 
     private async Task ShowAmpWizardAsync()
@@ -5435,7 +5513,8 @@ public sealed partial class MainWindow : Window
         RadioButtons hdmiMode = new();
         hdmiMode.Items.Add(_ui.AmpBitstream);
         hdmiMode.Items.Add(_ui.AmpHtPcm);
-        hdmiMode.SelectedIndex = _audioPolicy == AudioPolicy.HomeTheaterPcm ? 1 : 0;
+        // HDMI defaults to bitstream unless the user already chose PCM without it.
+        hdmiMode.SelectedIndex = !_settings.AudioPassthrough && _audioPolicy == AudioPolicy.HomeTheaterPcm ? 1 : 0;
 
         ComboBox deviceBox = new() { MinWidth = 320, HorizontalAlignment = HorizontalAlignment.Stretch };
         foreach (AudioDeviceInfo info in devices)
@@ -5490,24 +5569,24 @@ public sealed partial class MainWindow : Window
             hdmiMode.Visibility = kind == AudioSinkKind.Hdmi ? Visibility.Visible : Visibility.Collapsed;
             AudioDeviceInfo? prefer = AmpGuide.Prefer(devices, kind);
             SelectDevice(prefer?.Name);
-            AudioPolicy policy = AmpGuide.RecommendPolicy(
+            AmpRecommendation recommendation = AmpGuide.Recommend(
                 kind,
                 passthrough: kind == AudioSinkKind.Hdmi && hdmiMode.SelectedIndex == 0,
                 forceStereo: kind == AudioSinkKind.Speakers && speakerMode.SelectedIndex == 1);
-            note.Text = AmpWizardNote(kind, policy);
+            note.Text = AmpWizardNote(kind, recommendation);
         }
 
         sink.SelectionChanged += (_, _) => SyncUi();
         speakerMode.SelectionChanged += (_, _) =>
         {
-            note.Text = AmpWizardNote(Kind(), AmpGuide.RecommendPolicy(
+            note.Text = AmpWizardNote(Kind(), AmpGuide.Recommend(
                 Kind(),
                 passthrough: false,
                 forceStereo: speakerMode.SelectedIndex == 1));
         };
         hdmiMode.SelectionChanged += (_, _) =>
         {
-            note.Text = AmpWizardNote(Kind(), AmpGuide.RecommendPolicy(
+            note.Text = AmpWizardNote(Kind(), AmpGuide.Recommend(
                 Kind(),
                 passthrough: hdmiMode.SelectedIndex == 0));
         };
@@ -5561,38 +5640,35 @@ public sealed partial class MainWindow : Window
         }
 
         AudioSinkKind kind = Kind();
-        AudioPolicy policy = AmpGuide.RecommendPolicy(
+        AmpRecommendation recommendation = AmpGuide.Recommend(
             kind,
             passthrough: kind == AudioSinkKind.Hdmi && hdmiMode.SelectedIndex == 0,
             forceStereo: kind == AudioSinkKind.Speakers && speakerMode.SelectedIndex == 1);
         string device = deviceBox.SelectedItem is ComboBoxItem { Tag: string name } && !string.IsNullOrWhiteSpace(name)
             ? name
             : "auto";
-        await ApplyAmpGuideAsync(policy, device).ConfigureAwait(true);
+        await ApplyAmpGuideAsync(recommendation, device).ConfigureAwait(true);
     }
 
-    private async Task ApplyAmpGuideAsync(AudioPolicy policy, string device)
+    private async Task ApplyAmpGuideAsync(AmpRecommendation recommendation, string device)
     {
         _settings = _settings with
         {
-            AudioPolicy = policy,
+            AudioPolicy = recommendation.Policy,
+            AudioPassthrough = recommendation.Passthrough,
             AudioDevice = device,
         };
-        _audioPolicy = policy;
-        if (policy == AudioPolicy.Bitstream)
-        {
-            _night = false;
-        }
-
+        _audioPolicy = recommendation.Policy;
         await ApplyPlaybackPolicyAsync().ConfigureAwait(true);
-        await CheckBitstreamAsync().ConfigureAwait(true);
-        await RefreshStatusAsync().ConfigureAwait(true);
-        ShowOsd(policy == AudioPolicy.Bitstream ? _ui.AudioBitstream + "  " + DeviceLabel(device) : DeviceLabel(device));
+        await SettleAudioAsync().ConfigureAwait(true);
+        ShowOsd(recommendation.Passthrough
+            ? _ui.AudioPassthrough + "  " + DeviceLabel(device)
+            : DeviceLabel(device));
     }
 
-    private string AmpWizardNote(AudioSinkKind kind, AudioPolicy policy)
+    private string AmpWizardNote(AudioSinkKind kind, AmpRecommendation recommendation)
     {
-        if (policy == AudioPolicy.Bitstream)
+        if (recommendation.Passthrough)
         {
             return _ui.AmpNoteBitstream;
         }
@@ -5602,7 +5678,7 @@ public sealed partial class MainWindow : Window
             return _ui.AmpNoteSpeakers;
         }
 
-        if (policy == AudioPolicy.HomeTheaterPcm)
+        if (recommendation.Policy == AudioPolicy.HomeTheaterPcm)
         {
             return _ui.AmpNoteHtPcm;
         }

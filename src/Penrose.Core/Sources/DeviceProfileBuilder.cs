@@ -12,18 +12,18 @@ public static class DeviceProfileBuilder
     public const string ClientName = "Penrose";
 
     /// <summary>
-    /// Snapshot of the current session. Audio capabilities follow the user's audio
-    /// policy (bitstream advertises the IEC61937 codecs mpv is told to pass through),
+    /// Snapshot of the current session. The layout follows the user's PCM policy,
+    /// passthrough advertises the IEC61937 codecs mpv is told to pass through,
     /// display state comes from the surface, and the hwdec method from mpv.
     /// </summary>
     public static PlaybackCapabilitySnapshot FromRuntime(
         Penrose.Core.Playback.AudioPolicy audioPolicy,
+        bool audioPassthrough,
         string? audioDevice,
         bool displayIsHdr,
         string? hwdecCurrent,
         long? gpuAdapterLuid)
     {
-        bool bitstream = audioPolicy == Penrose.Core.Playback.AudioPolicy.Bitstream;
         return new PlaybackCapabilitySnapshot
         {
             DecoderNames =
@@ -46,8 +46,8 @@ public static class DeviceProfileBuilder
                 Penrose.Core.Playback.AudioPolicy.HomeTheaterPcm => "7.1",
                 _ => "auto",
             },
-            BitstreamAllowed = bitstream,
-            BitstreamCodecs = bitstream ? ["ac3", "eac3", "dts", "truehd"] : [],
+            BitstreamAllowed = audioPassthrough,
+            BitstreamCodecs = audioPassthrough ? ["ac3", "eac3", "dts", "truehd"] : [],
             SoftwareDecodingAllowed = true,
             UncReachable = false,
             GpuAdapterLuid = gpuAdapterLuid,

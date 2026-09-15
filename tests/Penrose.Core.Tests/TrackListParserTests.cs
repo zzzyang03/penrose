@@ -49,11 +49,27 @@ public sealed class TrackListParserTests
     }
 
     [Fact]
+    public void Passthrough_codecs_are_the_spdif_list()
+    {
+        Assert.True(AudioPassthrough.IsPassthroughCodec("ac3"));
+        Assert.True(AudioPassthrough.IsPassthroughCodec("eac3"));
+        Assert.True(AudioPassthrough.IsPassthroughCodec("dts"));
+        Assert.True(AudioPassthrough.IsPassthroughCodec("truehd"));
+        Assert.True(AudioPassthrough.IsPassthroughCodec(" AC3 "));
+        Assert.False(AudioPassthrough.IsPassthroughCodec("aac"));
+        Assert.False(AudioPassthrough.IsPassthroughCodec("flac"));
+        Assert.False(AudioPassthrough.IsPassthroughCodec("pcm_s16le"));
+        Assert.False(AudioPassthrough.IsPassthroughCodec("mlp"));
+        Assert.False(AudioPassthrough.IsPassthroughCodec(null));
+    }
+
+    [Fact]
     public void Simple_settings_roundtrip_enums_as_names()
     {
         SimpleSettings settings = new()
         {
-            AudioPolicy = AudioPolicy.Bitstream,
+            AudioPolicy = AudioPolicy.HomeTheaterPcm,
+            AudioPassthrough = true,
             Volume = 42,
             NightMode = true,
             Mute = true,
@@ -72,9 +88,10 @@ public sealed class TrackListParserTests
             ],
         };
         string json = SimpleSettingsSerializer.ToJson(settings);
-        Assert.Contains("Bitstream", json, StringComparison.Ordinal);
+        Assert.Contains("HomeTheaterPcm", json, StringComparison.Ordinal);
         SimpleSettings loaded = SimpleSettingsSerializer.FromJson(json);
-        Assert.Equal(AudioPolicy.Bitstream, loaded.AudioPolicy);
+        Assert.Equal(AudioPolicy.HomeTheaterPcm, loaded.AudioPolicy);
+        Assert.True(loaded.AudioPassthrough);
         Assert.Equal(42, loaded.Volume);
         Assert.True(loaded.NightMode);
         Assert.True(loaded.Mute);

@@ -12,6 +12,12 @@ public sealed record SimpleSettings
     public AudioPolicy AudioPolicy { get; init; } = AudioPolicy.SystemCompatible;
     /// <summary>Pinned mpv <c>audio-device</c>. Null leaves mpv at <c>auto</c>.</summary>
     public string? AudioDevice { get; init; }
+    /// <summary>
+    /// Send AC3 / E-AC3 / DTS / TrueHD to the receiver undecoded (WASAPI
+    /// exclusive, mpv <c>audio-spdif</c>); other codecs still decode per
+    /// <see cref="AudioPolicy"/>. Forces <see cref="NightMode"/> off while on.
+    /// </summary>
+    public bool AudioPassthrough { get; init; }
     public bool RememberPlaybackPosition { get; init; } = true;
     public double Volume { get; init; } = 100;
     public bool Mute { get; init; }
@@ -52,7 +58,7 @@ public sealed record SimpleSettings
     /// <summary>
     /// mpv <c>audio-channels</c> override chosen from the transport bar (stereo,
     /// 2.1, 5.1, 7.1, or "auto" for the source layout). Empty follows the audio policy.
-    /// Ignored while bitstreaming.
+    /// Only shapes locally decoded tracks; a bitstreamed track is laid out by the receiver.
     /// </summary>
     public string AudioChannelsOverride { get; init; } = "";
     /// <summary>Keep the thin progress line visible in fullscreen after the controls hide.</summary>
@@ -121,12 +127,32 @@ public static class SimpleSettingsSerializer
 
         try
         {
-            return Migrate(JsonSerializer.Deserialize<SimpleSettings>(json, Options) ?? new SimpleSettings());
+            SimpleSettings loaded = JsonSerializer.Deserialize<SimpleSettings>(json, Options) ?? new SimpleSettings();
+            if (HasLegacyBitstreamPolicy(json))
+            {
+                loaded = loaded with { AudioPolicy = AudioPolicy.HomeTheaterPcm, AudioPassthrough = true };
+            }
+
+            return Migrate(loaded);
         }
         catch (JsonException)
         {
             return new SimpleSettings();
         }
+    }
+
+    /// <summary>
+    /// Up to 0.1.1 passthrough was a fourth <c>audioPolicy</c> value, <c>Bitstream</c>.
+    /// The lenient enum converter turns that unknown name into the default, so the
+    /// raw document is checked before the value is lost.
+    /// </summary>
+    private static bool HasLegacyBitstreamPolicy(string json)
+    {
+        using JsonDocument document = JsonDocument.Parse(json);
+        return document.RootElement.ValueKind == JsonValueKind.Object
+            && document.RootElement.TryGetProperty("audioPolicy", out JsonElement policy)
+            && policy.ValueKind == JsonValueKind.String
+            && string.Equals(policy.GetString(), "Bitstream", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>Single <c>library</c> entry (pre multi-server) becomes the first, active saved server.</summary>

@@ -18,11 +18,13 @@ public enum HdrPolicy
     HintOff,
 }
 
-/// <summary>Audio output strategy. Bitstream failure must fall back to PCM with a visible prompt.</summary>
+/// <summary>
+/// PCM output strategy (channel layout). Passthrough is an independent overlay:
+/// <c>SimpleSettings.AudioPassthrough</c> / <c>PlaybackPolicyOptions.WithPassthrough</c>.
+/// </summary>
 public enum AudioPolicy
 {
     SystemCompatible,
     ForceStereo,
     HomeTheaterPcm,
-    Bitstream,
 }

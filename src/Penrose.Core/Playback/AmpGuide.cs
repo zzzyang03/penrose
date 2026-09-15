@@ -8,9 +8,12 @@ public enum AudioSinkKind
     Other,
 }
 
+/// <summary>What the wizard applies: a PCM layout plus whether to bitstream.</summary>
+public readonly record struct AmpRecommendation(AudioPolicy Policy, bool Passthrough);
+
 /// <summary>
 /// <c>audio-device=auto</c> may pick HDMI before laptop speakers.
-/// The wizard pins a WASAPI device and maps it to an <see cref="AudioPolicy"/>.
+/// The wizard pins a WASAPI device and maps it to an <see cref="AmpRecommendation"/>.
 /// </summary>
 public static class AmpGuide
 {
@@ -65,12 +68,13 @@ public static class AmpGuide
                 device.Name.Equals("auto", StringComparison.OrdinalIgnoreCase));
     }
 
-    public static AudioPolicy RecommendPolicy(AudioSinkKind kind, bool passthrough, bool forceStereo = false) =>
+    /// <summary>Passthrough is only offered for HDMI; speakers and auto never bitstream.</summary>
+    public static AmpRecommendation Recommend(AudioSinkKind kind, bool passthrough, bool forceStereo = false) =>
         kind switch
         {
-            AudioSinkKind.Hdmi => passthrough ? AudioPolicy.Bitstream : AudioPolicy.HomeTheaterPcm,
-            AudioSinkKind.Speakers => forceStereo ? AudioPolicy.ForceStereo : AudioPolicy.SystemCompatible,
-            _ => AudioPolicy.SystemCompatible,
+            AudioSinkKind.Hdmi => new(AudioPolicy.HomeTheaterPcm, passthrough),
+            AudioSinkKind.Speakers => new(forceStereo ? AudioPolicy.ForceStereo : AudioPolicy.SystemCompatible, false),
+            _ => new(AudioPolicy.SystemCompatible, false),
         };
 
     private static bool LooksHdmi(string text) =>

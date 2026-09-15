@@ -55,11 +55,12 @@ public sealed class OptionWhitelistTests
     }
 
     [Fact]
-    public void Playback_policy_maps_four_audio_strategies()
+    public void Playback_policy_maps_three_pcm_layouts()
     {
         PlaybackPolicyOptions defaults = new();
         IReadOnlyDictionary<string, string> compat = defaults
             .WithAudioPolicy(AudioPolicy.SystemCompatible)
+            .WithPassthrough(false)
             .ToProperties();
         Assert.Equal("wasapi", compat["ao"]);
         Assert.Equal("auto-safe", compat["audio-channels"]);
@@ -77,28 +78,52 @@ public sealed class OptionWhitelistTests
             .ToProperties();
         Assert.Equal("7.1,5.1,stereo", home["audio-channels"]);
         Assert.Equal("no", home["audio-exclusive"]);
-
-        IReadOnlyDictionary<string, string> bitstream = defaults
-            .WithAudioPolicy(AudioPolicy.Bitstream)
-            .ToProperties();
-        Assert.Equal("yes", bitstream["audio-exclusive"]);
-        Assert.Equal("ac3,eac3,dts,dts-hd,truehd", bitstream["audio-spdif"]);
-        Assert.Equal("", bitstream["af"]);
     }
 
     [Fact]
-    public void Night_mode_attaches_graph_and_bitstream_clears_it()
+    public void Passthrough_adds_spdif_and_exclusive_on_top_of_the_layout()
+    {
+        IReadOnlyDictionary<string, string> on = new PlaybackPolicyOptions()
+            .WithAudioPolicy(AudioPolicy.HomeTheaterPcm)
+            .WithPassthrough(true)
+            .ToProperties();
+        Assert.Equal("7.1,5.1,stereo", on["audio-channels"]);
+        Assert.Equal("yes", on["audio-exclusive"]);
+        Assert.Equal(AudioPassthrough.SpdifCodecs, on["audio-spdif"]);
+        Assert.Equal("ac3,eac3,dts,dts-hd,truehd", on["audio-spdif"]);
+        Assert.Equal("", on["af"]);
+
+        // The two overlays are orthogonal: the layout call must not clear passthrough.
+        IReadOnlyDictionary<string, string> reordered = new PlaybackPolicyOptions()
+            .WithPassthrough(true)
+            .WithAudioPolicy(AudioPolicy.ForceStereo)
+            .ToProperties();
+        Assert.Equal("stereo", reordered["audio-channels"]);
+        Assert.Equal("yes", reordered["audio-exclusive"]);
+        Assert.Equal(AudioPassthrough.SpdifCodecs, reordered["audio-spdif"]);
+
+        IReadOnlyDictionary<string, string> off = new PlaybackPolicyOptions()
+            .WithPassthrough(true)
+            .WithPassthrough(false)
+            .ToProperties();
+        Assert.Equal("no", off["audio-exclusive"]);
+        Assert.Equal("", off["audio-spdif"]);
+    }
+
+    [Fact]
+    public void Night_mode_attaches_graph_and_passthrough_clears_it()
     {
         PlaybackPolicyOptions night = new PlaybackPolicyOptions().WithNightMode(true);
         IReadOnlyDictionary<string, string> properties = night.ToProperties();
         Assert.Equal(PlaybackPolicyOptions.NightModeFilterGraph, properties["af"]);
         Assert.Equal("acompressor,dynaudnorm,alimiter", properties["af"]);
 
-        IReadOnlyDictionary<string, string> bitstream = night
-            .WithAudioPolicy(AudioPolicy.Bitstream)
-            .ToProperties();
-        Assert.Equal("", bitstream["af"]);
-        Assert.False(night.WithAudioPolicy(AudioPolicy.Bitstream).NightMode);
+        PlaybackPolicyOptions passthrough = night.WithPassthrough(true);
+        Assert.Equal("", passthrough.ToProperties()["af"]);
+        Assert.False(passthrough.NightMode);
+
+        // Turning passthrough off does not restore or remove a night graph on its own.
+        Assert.Equal(PlaybackPolicyOptions.NightModeFilterGraph, night.WithPassthrough(false).ToProperties()["af"]);
     }
 
     [Fact]
