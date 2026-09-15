@@ -879,6 +879,7 @@ public sealed partial class MainWindow
         public required ToggleSwitch Associate { get; init; }
         public required ToggleSwitch ProgressLine { get; init; }
         public required ToggleSwitch Passthrough { get; init; }
+        public required ToggleSwitch HardwareDecoding { get; init; }
         public required ComboBox Quality { get; init; }
         public required ComboBox Language { get; init; }
         public required ComboBox Encoding { get; init; }

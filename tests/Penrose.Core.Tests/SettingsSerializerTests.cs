@@ -84,6 +84,19 @@ public sealed class SettingsSerializerTests
     }
 
     [Fact]
+    public void Hardware_decoding_is_on_by_default_and_round_trips_off()
+    {
+        Assert.True(new SimpleSettings().HardwareDecoding);
+        Assert.True(SimpleSettingsSerializer.FromJson("{}").HardwareDecoding);
+        // Settings saved before the toggle existed keep hardware decoding.
+        Assert.True(SimpleSettingsSerializer.FromJson("""{"quality":"High","volume":42}""").HardwareDecoding);
+
+        string json = SimpleSettingsSerializer.ToJson(new SimpleSettings { HardwareDecoding = false });
+        Assert.Contains("\"hardwareDecoding\":false", json, StringComparison.Ordinal);
+        Assert.False(SimpleSettingsSerializer.FromJson(json).HardwareDecoding);
+    }
+
+    [Fact]
     public void Legacy_bitstream_policy_migrates_to_passthrough()
     {
         // 0.1.0 / 0.1.1 stored passthrough as a fourth audioPolicy value.

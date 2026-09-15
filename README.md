@@ -56,6 +56,7 @@
 - 窗口无法承载 HDR 信号时，自动切换到顶层全屏并以 HDR10（PQ）输出
 - 可选：播放 HDR 片源时打开 Windows HDR、匹配显示器刷新率，播完后都会还原
 - 画中画、画质预设，以及 Dolby Vision、HDR10+、Dolby Atmos、DTS:X 格式徽标
+- 默认硬件解码；遇到花屏、绿屏等解码问题时，可在设置里关闭“硬件解码”，改用软件解码
 
 **音频**
 
@@ -228,6 +229,7 @@ They are not code-signed yet: if SmartScreen warns on first launch, choose **Mor
 - Automatic switch to top-level full screen with HDR10 (PQ) output when a window cannot carry the signal
 - Optional: turn on Windows HDR for HDR files and match the display refresh rate, both restored afterwards
 - Picture-in-picture, picture-quality presets, and format badges for Dolby Vision, HDR10+, Dolby Atmos and DTS:X
+- Hardware decoding by default; turn off "Hardware decoding" in settings to decode in software when a driver shows corrupted or green frames
 
 **Audio**
 

@@ -83,6 +83,8 @@ public sealed record UiStrings
     public required string CheckUpdates { get; init; }
     public required string Version { get; init; }
     public required string PictureQuality { get; init; }
+    public required string HardwareDecoding { get; init; }
+    public required string HardwareDecodingHint { get; init; }
     public required string QualityFast { get; init; }
     public required string QualityBalanced { get; init; }
     public required string QualityHigh { get; init; }
@@ -365,6 +367,8 @@ public sealed record UiStrings
         CheckUpdates = "检查更新",
         Version = "版本  {0}",
         PictureQuality = "画面质量",
+        HardwareDecoding = "硬件解码",
+        HardwareDecodingHint = "默认开启，由显卡解码，更省电也更流畅。遇到花屏、绿屏、黑屏或播放崩溃时可以关闭，改用软件解码（由 CPU 解码，4K / HDR 片源可能卡顿）。",
         QualityFast = "快速",
         QualityBalanced = "均衡",
         QualityHigh = "高质量",
@@ -648,6 +652,8 @@ public sealed record UiStrings
         CheckUpdates = "Check for updates",
         Version = "Version  {0}",
         PictureQuality = "Picture quality",
+        HardwareDecoding = "Hardware decoding",
+        HardwareDecodingHint = "On by default: the graphics card decodes, which is smoother and uses less power. Turn it off to decode in software (on the CPU) if you see corrupted, green or black frames or playback crashes; 4K / HDR files may stutter.",
         QualityFast = "Fast",
         QualityBalanced = "Balanced",
         QualityHigh = "High",
