@@ -65,3 +65,7 @@ appsettings.*.local.json
 logs/
 *.dmp
 *.etl
+
+## Local AI agent instructions (kept on the maintainer's machine only)
+/AGENTS.md
+/CLAUDE.md
