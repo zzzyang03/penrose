@@ -111,6 +111,7 @@ public static class EmbyPlaybackInfoParser
                 ExternalSubtitles = subs,
                 ServerPath = path,
                 SupportsPathMapping = true,
+                SourceKind = localFile.IsUnc ? MediaSourceKind.NetworkShare : MediaSourceKind.LocalFile,
             };
         }
 
@@ -135,6 +136,7 @@ public static class EmbyPlaybackInfoParser
                 ExternalSubtitles = subs,
                 ServerPath = path,
                 SupportsPathMapping = DirectPlayPath.LooksLikeFile(protocol, path),
+                SourceKind = MediaSourceKind.ServerDirectPlay,
             };
         }
 
@@ -150,6 +152,7 @@ public static class EmbyPlaybackInfoParser
                 ItemId = itemId,
                 ProviderId = "emby",
                 ExternalSubtitles = subs,
+                SourceKind = MediaSourceKind.ServerTranscode,
             };
         }
 
