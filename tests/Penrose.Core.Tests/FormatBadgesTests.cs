@@ -164,7 +164,7 @@ public sealed class FormatBadgesTests
     [InlineData(null, "Dolby Digital Plus", "Dolby Digital Plus")]
     [InlineData("unknowncodec", "", "unknowncodec")]
     [InlineData("opus", "opus", "Opus")]
-    public void CodecProfileLabel_returns_human_readable_name(string codec, string? profile, string expected)
+    public void CodecProfileLabel_returns_human_readable_name(string? codec, string? profile, string expected)
     {
         Assert.Equal(expected, FormatBadges.CodecProfileLabel(codec, profile));
     }

@@ -75,6 +75,7 @@ Jellyfin 支持仍在开发中：已能解析播放信息，但应用暂时还�
 **界面**
 
 - WinUI 3，简体中文 / English
+- 按 `I` 键查看播放信息面板：分五个区块——播放类型（本地 / strm / 服务器直连 / 服务器转码等）、媒体源（封装格式、文件大小、地址）、视频（编码、动态范围、分辨率、帧率、码率）、音频（编码、声道、采样率、码率）、输出（硬件解码、交换链、峰值、刷新率、音频设备）。视频 / 音频码率、帧率会在面板打开期间以 1 Hz 实时刷新。
 - 诊断导出会自动隐去日志中的令牌和密码
 
 ## 快捷键
@@ -93,7 +94,7 @@ Jellyfin 支持仍在开发中：已能解析播放信息，但应用暂时还�
 | `F`、双击 | 全屏 |
 | `T` | 顶层全屏（HDR10 输出） |
 | `P` | 画中画 |
-| `I` | 播放信息 |
+| `I` | 播放信息（类型、源、视频、音频、输出） |
 | `N` | 夜间模式 |
 | `O` / `U` | 打开文件 / 打开 URL |
 | `E` | 导出诊断信息 |
@@ -101,6 +102,20 @@ Jellyfin 支持仍在开发中：已能解析播放信息，但应用暂时还�
 | `Esc` | 退出全屏或关闭当前页面 |
 
 也支持媒体键；Xbox 手柄 **A** 播放 / 暂停，**LB** / **RB** 上一个 / 下一个。
+
+## AI 协作准则 / AI-assisted contributions
+
+AI 工具（Cursor、Claude Code、GitHub Copilot 等）可用于辅助开发，但每个 commit 必须遵循以下规则：
+
+- Commit author 必须是自然人，不接受 AI agent 作为独立贡献者。所有改动都由你亲自提交并负责。
+- AI 协助生成的 PR，描述里须明确说明 AI 参与范围，建议使用 `Assisted-by:` trailer（例：`Assisted-by: Claude (Anthropic)`），便于审计与回溯。
+- 合并前必须由自然人 review 所有 AI 协助的代码，确认许可证兼容、可读性、无明显安全 / 隐私问题。
+- GPL-3.0-or-later 协议下，AI 协助的代码同样受相同协议约束，作者必须对贡献的合规性负责。
+
+AI assistance is welcome as a tool, but commits in this repository are always
+human-authored and signed off by a human reviewer. PR descriptions that include
+AI-assisted code must state so clearly (a `Assisted-by:` trailer is encouraged)
+so the history stays auditable.
 
 ## 从源码构建
 
@@ -230,6 +245,12 @@ Jellyfin support is in progress: playback-info parsing exists, but the app canno
 **Interface**
 
 - WinUI 3, Simplified Chinese and English
+- Press `I` for the playback info overlay: it groups what is playing into 5 labeled
+  sections — playback kind (本地 / strm / 服务器直连 / 服务器转码 / …),
+  media source (container + size + URI), video (codec + dynamic range + resolution +
+  fps + bitrate), audio (codec profile + channels + sample rate + bitrate), and output
+  (HW decoder, swapchain, peak, refresh, audio device). Video and audio bitrate, fps
+  refresh at 1 Hz while the overlay is open.
 - Diagnostics export that redacts tokens and passwords from the logs
 
 ### Keyboard and mouse
@@ -248,7 +269,7 @@ Jellyfin support is in progress: playback-info parsing exists, but the app canno
 | `F`, double-click | Full screen |
 | `T` | Top-level full screen (HDR10 output) |
 | `P` | Picture-in-picture |
-| `I` | Playback info |
+| `I` | Playback info (kind, source, video, audio, output) |
 | `N` | Night mode |
 | `O` / `U` | Open file / open URL |
 | `E` | Export diagnostics |
