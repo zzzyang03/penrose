@@ -62,6 +62,10 @@ public sealed record UiStrings
     public required string VolumeOsd { get; init; }
     public required string SpeedOsd { get; init; }
     public required string SubDelayOsd { get; init; }
+    public required string AudioDelayOsd { get; init; }
+    public required string AudioDelayEarlier { get; init; }
+    public required string AudioDelayLater { get; init; }
+    public required string AudioDelayReset { get; init; }
     public required string SeekBack { get; init; }
     public required string SeekForward { get; init; }
     public required string DiscTitleOsd { get; init; }
@@ -340,6 +344,10 @@ public sealed record UiStrings
         VolumeOsd = "音量  {0}",
         SpeedOsd = "倍速  {0}×",
         SubDelayOsd = "字幕  {0} s",
+        AudioDelayOsd = "音频延迟  {0}",
+        AudioDelayEarlier = "声音提前 {0} 毫秒",
+        AudioDelayLater = "声音推后 {0} 毫秒",
+        AudioDelayReset = "音频延迟归零",
         SeekBack = "−5 秒",
         SeekForward = "+5 秒",
         DiscTitleOsd = "Title {0}",
@@ -619,6 +627,10 @@ public sealed record UiStrings
         VolumeOsd = "Volume  {0}",
         SpeedOsd = "Speed  {0}×",
         SubDelayOsd = "Subs  {0} s",
+        AudioDelayOsd = "Audio delay  {0}",
+        AudioDelayEarlier = "Sound {0} ms earlier",
+        AudioDelayLater = "Sound {0} ms later",
+        AudioDelayReset = "Reset audio delay",
         SeekBack = "−5 s",
         SeekForward = "+5 s",
         DiscTitleOsd = "Title {0}",
