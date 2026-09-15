@@ -2,6 +2,25 @@ using Penrose.Core.Playback;
 
 namespace Penrose.Core.Sources;
 
+/// <summary>
+/// What kind of medium is feeding this candidate. The factory or media-source
+/// parser decides once; the UI surfaces it in the playback info overlay so
+/// "本地" / "strm 中继" / "服务器转码" can be told apart. A missing value is
+/// <see cref="Unknown"/>; the field defaults to that so old call sites keep
+/// working.
+/// </summary>
+public enum MediaSourceKind
+{
+    Unknown,
+    LocalFile,
+    LocalDisc,
+    NetworkShare,
+    StrmDirect,
+    StrmRelay,
+    ServerDirectPlay,
+    ServerTranscode,
+}
+
 public enum PlayMethod
 {
     DirectPlay,
@@ -34,6 +53,13 @@ public sealed record PlaybackCandidate
 
     public bool SupportsPathMapping { get; init; }
 
+    /// <summary>
+    /// User-facing playback kind. Defaults to <see cref="MediaSourceKind.Unknown"/>
+    /// so older call sites keep compiling; the local factory and the
+    /// Emby/Jellyfin playback-info parsers fill it in.
+    /// </summary>
+    public MediaSourceKind SourceKind { get; init; } = MediaSourceKind.Unknown;
+
     public PlaybackRequest ToPlaybackRequest(Guid requestId) =>
         new()
         {
@@ -42,6 +68,7 @@ public sealed record PlaybackCandidate
             Headers = Headers,
             ExternalSubtitles = ExternalSubtitles,
             Expiration = Expiration,
+            SourceKind = SourceKind,
             ReportingContext = new ReportingContext(
                 ProviderId,
                 ItemId,
