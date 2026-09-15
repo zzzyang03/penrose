@@ -60,7 +60,18 @@ public sealed partial class MainWindow : Window
     private PlaybackStore? _store;
     private IDiagnosticBundleExporter? _diagnostics;
     private SimpleSettings _settings = new();
-    private Uri? _currentUri;
+        private Uri? _currentUri;
+    /// <summary>
+    /// What the user is actually playing, for the info overlay. Mirrors
+    /// <c>_currentUri</c> in lifecycle: set when a load starts, reset on
+    /// stop / return-home / return-to-library.
+    /// </summary>
+    private MediaSourceKind _currentSourceKind = MediaSourceKind.Unknown;
+    /// <summary>
+    /// 1 Hz refresh while the info overlay is visible. Stops when the
+    /// overlay hides so we do not poll mpv at idle.
+    /// </summary>
+    private DispatcherTimer? _infoRefreshTimer;
     private bool _started;
     private bool _starting;
     private bool _seeking;
@@ -138,6 +149,17 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
         Title = AppVersion.Name;
         EnsureAcrylicBackdrop();
+
+        // 1 Hz refresh for the info overlay. Started by ToggleInfoOverlayAsync
+        // when the overlay shows, stopped when it hides.
+        _infoRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _infoRefreshTimer.Tick += async (_, _) =>
+        {
+            if (InfoOverlay.Visibility == Visibility.Visible)
+            {
+                await RefreshStatusAsync().ConfigureAwait(true);
+            }
+        };
 
         _hwnd = WindowNative.GetWindowHandle(this);
         _appWindow = AppWindow.GetFromWindowId(Win32Interop.GetWindowIdFromWindow(_hwnd));
@@ -1418,6 +1440,7 @@ public sealed partial class MainWindow : Window
             }
 
             _currentUri = request.Uri;
+            _currentSourceKind = request.SourceKind;
             _progressKey = progressKey;
             HideError();
             PlaybackSnapshot loaded = await _engine.LoadAsync(request).ConfigureAwait(true);
@@ -2847,6 +2870,7 @@ public sealed partial class MainWindow : Window
         if (!IsPlaybackWindow())
         {
             InfoOverlay.Visibility = Visibility.Collapsed;
+            _infoRefreshTimer?.Stop();
             return;
         }
 
@@ -2854,13 +2878,22 @@ public sealed partial class MainWindow : Window
         InfoOverlay.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         if (show)
         {
+            // One immediate refresh, then 1 Hz polling for bitrate/fps while the
+            // overlay stays open. The timer stops on hide so we do not poll mpv
+            // at idle.
             await RefreshStatusAsync().ConfigureAwait(true);
+            _infoRefreshTimer?.Start();
+        }
+        else
+        {
+            _infoRefreshTimer?.Stop();
         }
     }
 
     /// <summary>
-    /// Technical state for the info overlay. Only read from mpv while the overlay
-    /// is showing: this used to run seven property reads on every UI action.
+    /// Technical state for the info overlay. Only runs when the overlay is
+    /// visible; the timer fires this once a second so bitrate / fps stay live
+    /// without an mpv observer.
     /// </summary>
     private async Task RefreshStatusAsync()
     {
@@ -2869,6 +2902,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        // --- Output section (unchanged from before the rewrite) ---
         string hwdec = await _engine.GetPropertyStringAsync("hwdec-current").ConfigureAwait(true) ?? "-";
         string vo = await _engine.GetPropertyStringAsync("current-vo").ConfigureAwait(true) ?? "-";
         string fmt = await _engine.GetPropertyStringAsync("d3d11-output-format").ConfigureAwait(true) ?? "-";
@@ -2880,16 +2914,42 @@ public sealed partial class MainWindow : Window
             && await _engine.GetPropertyStringAsync("video-params/h").ConfigureAwait(true) is { } h
             ? $"{w}×{h}"
             : "-";
-        string fpsRaw = await _engine.GetPropertyStringAsync("container-fps").ConfigureAwait(true) ?? "";
-        string fps = double.TryParse(fpsRaw, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double fpsValue)
-            ? fpsValue.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) + " fps"
-            : "-";
+        string containerFpsRaw = await _engine.GetPropertyStringAsync("container-fps").ConfigureAwait(true) ?? "";
+        string effectiveFpsRaw = await _engine.GetPropertyStringAsync("estimated-vf-fps").ConfigureAwait(true) ?? "";
         // video-format is the short codec id (h264, hevc); video-codec is the long libavcodec description.
-        string vcodec = await _engine.GetPropertyStringAsync("video-format").ConfigureAwait(true) ?? "-";
+        string vcodec = await _engine.GetPropertyStringAsync("video-codec").ConfigureAwait(true)
+            ?? await _engine.GetPropertyStringAsync("video-format").ConfigureAwait(true)
+            ?? "-";
         string acodec = await _engine.GetPropertyStringAsync("audio-codec-name").ConfigureAwait(true) ?? "-";
         string channels = await _engine.GetPropertyStringAsync("audio-params/channels").ConfigureAwait(true) ?? "-";
+        string channelCountRaw = await _engine.GetPropertyStringAsync("audio-params/channel-count").ConfigureAwait(true) ?? "";
+        string sampleRateRaw = await _engine.GetPropertyStringAsync("audio-params/samplerate").ConfigureAwait(true) ?? "";
+        string videoBitrateRaw = await _engine.GetPropertyStringAsync("video-bitrate").ConfigureAwait(true) ?? "";
+        string audioBitrateRaw = await _engine.GetPropertyStringAsync("audio-bitrate").ConfigureAwait(true) ?? "";
+        string containerRaw = await _engine.GetPropertyStringAsync("file-format").ConfigureAwait(true) ?? "";
+        string fileSizeRaw = await _engine.GetPropertyStringAsync("file-size").ConfigureAwait(true) ?? "";
         string device = await _engine.GetPropertyStringAsync("audio-device").ConfigureAwait(true) ?? "auto";
+
+        // The audio codec profile comes from the selected audio track in the
+        // track-list. RefreshStatusAsync already runs only when the overlay is
+        // visible, so the parse cost is fine.
+        string acodecProfile = "";
+        try
+        {
+            string? tracksJson = await _engine.GetPropertyStringAsync("track-list").ConfigureAwait(true);
+            TrackInfo? audio = TrackListParser.Parse(tracksJson)
+                .FirstOrDefault(t => t.Type == "audio" && t.Selected);
+            acodecProfile = audio?.CodecProfile ?? "";
+        }
+        catch (Exception ex)
+        {
+            Log.Debug(ex, "track-list parse failed in info overlay");
+        }
+
+        // --- Header ---
         string name = _currentUri is null ? "-" : Path.GetFileName(Uri.UnescapeDataString(_currentUri.AbsolutePath));
+        string playlist = _playlist.Count > 1 ? $"  ({_playlistIndex + 1}/{_playlist.Count})" : "";
+        string badges = _currentBadges.Count > 0 ? "  [" + string.Join(" · ", _currentBadges) + "]" : "";
         string mode = _surface is { IsTopLevel: true }
             ? _ui.StatusTopLevel
             : IsPip() ? _ui.StatusPip
@@ -2897,18 +2957,119 @@ public sealed partial class MainWindow : Window
         string refresh = _surface?.CurrentRefreshRateHz is > 0 and var hz
             ? hz.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) + " Hz"
             : "-";
-        string playlist = _playlist.Count > 1 ? $"  ({_playlistIndex + 1}/{_playlist.Count})" : "";
         string passthrough = _settings.AudioPassthrough
             ? "  " + (_bitstreamFallback ? _ui.AudioBitstreamPcm : _spdifActive ? _ui.AudioBitstream : _ui.AudioPassthrough)
             : "";
         string flags = passthrough + (_night ? "  " + _ui.Night : "") + (_muted ? "  " + _ui.Mute : "");
-        string badges = _currentBadges.Count > 0 ? "  [" + string.Join(" · ", _currentBadges) + "]" : "";
+
+        // Local helpers must be declared before use (C# requirement).
+        string FormatFpsForDisplay(string containerFps, string effectiveFps)
+        {
+            bool hasContainer = double.TryParse(containerFps, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double cFps) && cFps > 0;
+            bool hasEffective = double.TryParse(effectiveFps, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double eFps) && eFps > 0;
+            if (!hasContainer && !hasEffective)
+            {
+                return _ui.InfoValueDash;
+            }
+
+            Func<double, string> fpsFmt = v => v.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
+            if (hasContainer && hasEffective && Math.Abs(cFps - eFps) > 0.01d)
+            {
+                return string.Format(System.Globalization.CultureInfo.InvariantCulture, _ui.InfoFpsWithEffective, fpsFmt(cFps), fpsFmt(eFps));
+            }
+
+            return fpsFmt(hasEffective ? eFps : cFps) + " fps";
+        }
+
+        string ReportingMethodLabel()
+        {
+            return _currentSourceKind switch
+            {
+                MediaSourceKind.ServerDirectPlay => "DirectPlay",
+                MediaSourceKind.ServerTranscode => "Transcode",
+                _ => "",
+            };
+        }
+
+        // --- Section 1: Playback kind ---
+        string kindLabel = _currentSourceKind switch
+        {
+            MediaSourceKind.LocalFile => _ui.InfoKindLocalFile,
+            MediaSourceKind.LocalDisc => _ui.InfoKindLocalDisc,
+            MediaSourceKind.NetworkShare => _ui.InfoKindNetworkShare,
+            MediaSourceKind.StrmDirect => _ui.InfoKindStrmDirect,
+            MediaSourceKind.StrmRelay => _ui.InfoKindStrmRelay,
+            MediaSourceKind.ServerDirectPlay => _ui.InfoKindServerDirect,
+            MediaSourceKind.ServerTranscode => _ui.InfoKindServerTranscode,
+            _ => _ui.InfoKindUnknown,
+        };
+        string methodLabel = ReportingMethodLabel();
+        string playbackSection =
+            $"{_ui.InfoPlayback}\n  {kindLabel}{(string.IsNullOrEmpty(methodLabel) ? "" : "  (" + methodLabel + ")")}";
+
+        // --- Section 2: Media source ---
+        string container = InfoFormatters.ContainerLabel(containerRaw);
+        // file-size is only meaningful for local-style sources; mpv reports
+        // nothing useful for live / transcoded streams.
+        bool localish = _currentSourceKind is MediaSourceKind.LocalFile
+            or MediaSourceKind.LocalDisc
+            or MediaSourceKind.NetworkShare
+            or MediaSourceKind.StrmDirect;
+        long? fileSize = localish && long.TryParse(fileSizeRaw, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out long bytes)
+            ? bytes
+            : null;
+        string sizeLabel = localish ? InfoFormatters.FormatBytes(fileSize, _ui.InfoValueDash) : _ui.InfoValueDash;
+        string sourceLine1 = localish
+            ? $"  {_ui.InfoLabelContainer}: {container}  {_ui.InfoLabelSize}: {sizeLabel}"
+            : $"  {_ui.InfoLabelContainer}: {container}";
+        string uriDisplay = _currentUri is null ? "-" : _currentUri.AbsoluteUri;
+        string sourceSection =
+            $"{_ui.InfoSource}\n{sourceLine1}\n  {_ui.InfoLabelUri}: {uriDisplay}";
+
+        // --- Section 3: Video ---
+        string rangeLabel = _ui.InfoRangeSdr;
+        switch (_currentRange)
+        {
+            case DynamicRange.Hdr10: rangeLabel = _ui.InfoRangeHdr10; break;
+            case DynamicRange.Hdr10Plus: rangeLabel = _ui.InfoRangeHdr10Plus; break;
+            case DynamicRange.Hlg: rangeLabel = _ui.InfoRangeHlg; break;
+            case DynamicRange.DolbyVision: rangeLabel = _ui.InfoRangeDolbyVision; break;
+        }
+        string fps = FormatFpsForDisplay(containerFpsRaw, effectiveFpsRaw);
+        long? videoBitrate = long.TryParse(videoBitrateRaw, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out long vbps) ? vbps : null;
+        string videoBitrateLabel = InfoFormatters.FormatBitrate(videoBitrate, _ui.InfoValueDash);
+        string videoLine1 = $"  {_ui.InfoLabelCodec}: {vcodec}  {_ui.InfoLabelRange}: {rangeLabel}";
+        string videoLine2 = $"  {_ui.InfoLabelResolution}: {size}  {_ui.InfoLabelFps}: {fps}  {_ui.InfoLabelBitrate}: {videoBitrateLabel}";
+        string videoLine3 = $"  pixel={pix}  gamma={gamma}  hwdec={hwdec}";
+        string videoSection = $"{_ui.InfoVideo}\n{videoLine1}\n{videoLine2}\n{videoLine3}";
+
+        // --- Section 4: Audio ---
+        string acodecLabel = FormatBadges.CodecProfileLabel(acodec, acodecProfile);
+        string channelCountLabel = int.TryParse(channelCountRaw, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out int chCount) && chCount > 0
+            ? chCount.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            : _ui.InfoValueDash;
+        string sampleRateLabel = double.TryParse(sampleRateRaw, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double srHz) && srHz > 0
+            ? (srHz / 1000d).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) + " kHz"
+            : _ui.InfoValueDash;
+        long? audioBitrate = long.TryParse(audioBitrateRaw, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out long abps) ? abps : null;
+        string audioBitrateLabel = InfoFormatters.FormatBitrate(audioBitrate, _ui.InfoValueDash);
+        string audioLine1 = $"  {_ui.InfoLabelCodec}: {acodecLabel}  {_ui.InfoLabelChannels}: {channelCountLabel} ({channels})";
+        string audioLine2 = $"  {_ui.InfoLabelSampleRate}: {sampleRateLabel}  {_ui.InfoLabelBitrate}: {audioBitrateLabel}";
+        string audioLine3 = $"  {AudioPolicyLabel(_audioPolicy)}  {device}{flags}";
+        string audioSection = $"{_ui.InfoAudio}\n{audioLine1}\n{audioLine2}\n{audioLine3}";
+
+        // --- Section 5: Output (kept at the bottom so we don't drop anything) ---
+        string outputLine1 = $"  {fmt} / {csp}  peak={peak}  vo={vo}";
+        string outputLine2 = $"  {mode}  {refresh}";
+        string outputSection = $"{_ui.InfoOutput}\n{outputLine1}\n{outputLine2}";
 
         StatusText.Text =
             $"{name}{playlist}{badges}\n" +
-            $"\n{_ui.InfoVideo}\n  {size}  {fps}  {vcodec}\n  {pix} / {gamma}  hwdec={hwdec}\n" +
-            $"\n{_ui.InfoOutput}\n  {fmt} / {csp}  peak={peak}\n  vo={vo}  {mode}  {refresh}\n" +
-            $"\n{_ui.InfoAudio}\n  {acodec}  {channels}\n  {AudioPolicyLabel(_audioPolicy)}  {device}{flags}";
+            $"\n{playbackSection}\n" +
+            $"\n{sourceSection}\n" +
+            $"\n{videoSection}\n" +
+            $"\n{audioSection}\n" +
+            $"\n{outputSection}";
     }
 
     private async Task SaveProgressAsync(bool? paused = null)
@@ -4496,6 +4657,7 @@ public sealed partial class MainWindow : Window
         }
 
         _currentUri = null;
+        _currentSourceKind = MediaSourceKind.Unknown;
         _progressKey = null;
         _currentLibraryItem = null;
         _prefetchedNext = null;
@@ -4530,6 +4692,7 @@ public sealed partial class MainWindow : Window
         }
 
         _currentUri = null;
+        _currentSourceKind = MediaSourceKind.Unknown;
         _progressKey = null;
         _currentLibraryItem = null;
         _prefetchedNext = null;
@@ -4946,6 +5109,7 @@ public sealed partial class MainWindow : Window
             }
 
             _currentUri = request.Uri;
+            _currentSourceKind = request.SourceKind;
             _progressKey = progressKey;
             _currentLibraryItem = item;
             _libraryQueue = queue ?? _libraryQueue;

@@ -29,6 +29,15 @@ public sealed record PlaybackRequest
     public AudioPolicy AudioPolicy { get; init; } = AudioPolicy.SystemCompatible;
 
     /// <summary>
+    /// What kind of medium this request plays. Defaults to
+    /// <see cref="Core.Sources.MediaSourceKind.Unknown"/>; the local factory and
+    /// the Emby/Jellyfin parsers set it. The info overlay labels the playback
+    /// ("本地播放" / "strm 中继" / "服务器转码" / …) from this field.
+    /// </summary>
+    public Core.Sources.MediaSourceKind SourceKind { get; init; } =
+        Core.Sources.MediaSourceKind.Unknown;
+
+    /// <summary>
     /// File-local options for loadfile. Must not be written to global
     /// http-header-fields / user-agent / cookies.
     /// </summary>

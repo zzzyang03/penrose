@@ -28,6 +28,7 @@ public static class LocalPlaybackFactory
                 Uri = uri,
                 StartPosition = startPosition,
                 ExternalSubtitles = extraSubtitles ?? [],
+                SourceKind = MediaSourceKind.StrmRelay,
             };
         }
 
@@ -52,9 +53,26 @@ public static class LocalPlaybackFactory
             throw new FileNotFoundException("Media file not found.", full);
         }
 
-        Uri uri = IsStrm(full)
-            ? ReadStrm(full)
-            : new Uri(full);
+        Uri uri;
+        MediaSourceKind sourceKind;
+        if (IsStrm(full))
+        {
+            uri = ReadStrm(full);
+            // strm is "direct" when it points at a file the player can open itself
+            // (file:// or an SMB UNC), and "relay" when it points at an http(s)
+            // URL the player must fetch.
+            sourceKind = uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps
+                ? MediaSourceKind.StrmRelay
+                : MediaSourceKind.StrmDirect;
+        }
+        else
+        {
+            uri = new Uri(full);
+            // UNC paths the player opens as a local file (for example
+            // \\server\share\foo.mkv) are treated as a network share here; a
+            // plain drive letter is just a local file.
+            sourceKind = uri.IsUnc ? MediaSourceKind.NetworkShare : MediaSourceKind.LocalFile;
+        }
 
         return new PlaybackRequest
         {
@@ -62,6 +80,7 @@ public static class LocalPlaybackFactory
             Uri = uri,
             StartPosition = startPosition,
             ExternalSubtitles = extraSubtitles ?? [],
+            SourceKind = sourceKind,
         };
     }
 
@@ -139,6 +158,7 @@ public static class LocalPlaybackFactory
             StartPosition = startPosition,
             ExternalSubtitles = extraSubtitles ?? [],
             DiscTitle = discTitle,
+            SourceKind = MediaSourceKind.LocalDisc,
         };
     }
 

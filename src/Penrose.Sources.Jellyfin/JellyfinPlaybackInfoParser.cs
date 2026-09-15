@@ -67,6 +67,7 @@ public static class JellyfinPlaybackInfoParser
                 ExternalSubtitles = subs,
                 ServerPath = path,
                 SupportsPathMapping = true,
+                SourceKind = localFile.IsUnc ? MediaSourceKind.NetworkShare : MediaSourceKind.LocalFile,
             };
         }
 
@@ -91,6 +92,7 @@ public static class JellyfinPlaybackInfoParser
                 ExternalSubtitles = subs,
                 ServerPath = path,
                 SupportsPathMapping = DirectPlayPath.LooksLikeFile(protocol, path),
+                SourceKind = MediaSourceKind.ServerDirectPlay,
             };
         }
 
@@ -106,6 +108,7 @@ public static class JellyfinPlaybackInfoParser
                 ItemId = itemId,
                 ProviderId = "jellyfin",
                 ExternalSubtitles = subs,
+                SourceKind = MediaSourceKind.ServerTranscode,
             };
         }
 

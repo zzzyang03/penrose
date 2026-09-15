@@ -11,12 +11,14 @@ Simplified Chinese first, then in English.
 
 ### 新增
 
+- 播放信息面板重新组织为 5 个区块：播放类型（本地 / strm / 服务器直连 / 服务器转码等）、媒体源（封装格式、大小、完整地址）、视频（编码、动态范围、分辨率、帧率、码率）、音频（编码、声道、采样率、码率）、输出。视频和音频码率、帧率在面板打开时以 1 Hz 实时刷新。
 - 设置页“音频输出”和音轨菜单里新增“音频直通”开关。打开后 AC3 / E-AC3 / DTS / TrueHD 以位流交给功放解码（WASAPI 独占），其他编码仍由播放器按所选输出模式解码；名单内编码未能直通时回退 PCM 并提示。
 
 ### 变更
 
 - 输出模式只保留三档 PCM：系统默认、强制立体声、家庭影院 PCM。原来的“位流”模式并入“音频直通”开关，旧设置里的“位流”会自动迁移为“家庭影院 PCM + 音频直通”。
 - 音频直通开启时夜间模式不可用；直通打开但当前音轨仍由播放器解码时，声道下混选择照常可用。
+- 在 `PlaybackRequest` 上引入 `MediaSourceKind SourceKind`，让本地工厂和 Emby / Jellyfin 解析器都明确报告当前播放属于哪一类（本地 / 光盘 / 网络共享 / strm 直连 / strm 中继 / 服务器直连 / 服务器转码），UI 用它来给面板打标签。
 
 ### 修复
 
@@ -24,6 +26,12 @@ Simplified Chinese first, then in English.
 
 ### Added
 
+- The I-key playback info overlay is reorganized into 5 labeled sections:
+  playback kind (local / .strm direct / .strm relay / server direct play / server
+  transcode), media source (container, size, full URI), video (codec, dynamic
+  range, resolution, fps, bitrate), audio (codec profile, channels, sample rate,
+  bitrate) and output (HW decoder, swapchain, peak, refresh, audio device).
+  Video and audio bitrate and fps refresh at 1 Hz while the overlay is open.
 - An "Audio passthrough" toggle in the settings page (Audio output) and in the
   audio track menu. When on, AC3 / E-AC3 / DTS / TrueHD are sent as a bitstream
   for the receiver to decode (WASAPI exclusive); other codecs are still decoded
@@ -37,6 +45,10 @@ Simplified Chinese first, then in English.
   a saved "Bitstream" setting migrates to home-theater PCM with passthrough on.
 - Night mode is unavailable while passthrough is on; the channel downmix picker
   stays available for tracks the player still decodes.
+- `PlaybackRequest` now carries a `MediaSourceKind SourceKind` so the local
+  factory and the Emby / Jellyfin parsers can label what is actually playing
+  (local file / disc / network share / .strm direct / .strm relay / server
+  direct play / server transcode); the info overlay reads it to pick its label.
 
 ### Fixed
 

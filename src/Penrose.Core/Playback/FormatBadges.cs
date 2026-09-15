@@ -103,6 +103,108 @@ public static class FormatBadges
         _ => "SDR",
     };
 
+    /// <summary>
+    /// Human-readable audio codec name. Prefers the libavcodec profile when it
+    /// tells the user something the codec name alone wouldn't (TrueHD vs.
+    /// TrueHD Atmos, DTS vs. DTS-HD MA, E-AC3 vs. Dolby Digital Plus). When the
+    /// codec is the trade name and there is no profile, returns the codec name
+    /// as-is so callers don't have to special-case "no profile".
+    /// </summary>
+    public static string CodecProfileLabel(string? codec, string? profile)
+    {
+        string c = (codec ?? "").Trim();
+        string p = (profile ?? "").Trim();
+
+        if (p.Contains("Atmos", StringComparison.OrdinalIgnoreCase))
+        {
+            return DolbyAtmos;
+        }
+
+        // Check DTS:X before plain DTS-HD so "DTS-HD MA + DTS:X" picks DTS:X.
+        if (p.Contains("DTS:X", StringComparison.OrdinalIgnoreCase) || p.Contains("DTS:X MA", StringComparison.OrdinalIgnoreCase))
+        {
+            return DtsX;
+        }
+
+        // Check DTS-HD MA / DTS-HD before DTS:X so "DTS-HD MA + DTS:X" doesn't
+        // accidentally fall into the DTS:X case above (already handled above).
+        if (p.Contains("DTS-HD MA", StringComparison.OrdinalIgnoreCase) || p.Contains("DTS-HD Master Audio", StringComparison.OrdinalIgnoreCase))
+        {
+            return "DTS-HD MA";
+        }
+
+        if (p.Contains("DTS-HD", StringComparison.OrdinalIgnoreCase))
+        {
+            return "DTS-HD";
+        }
+
+        // E-AC3 checks come before AC-3 so "Dolby Digital Plus" returns the
+        // E-AC3 label even though it also contains "Dolby Digital".
+        if (c.Equals("eac3", StringComparison.OrdinalIgnoreCase)
+            || p.Contains("E-AC3", StringComparison.OrdinalIgnoreCase)
+            || p.Contains("Enhanced AC-3", StringComparison.OrdinalIgnoreCase))
+        {
+            return "E-AC3 (Dolby Digital Plus)";
+        }
+
+        if (p.Equals("TrueHD", StringComparison.OrdinalIgnoreCase) || p.Contains("TrueHD", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Dolby TrueHD";
+        }
+
+        if (p.Contains("Dolby Digital Plus", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Dolby Digital Plus";
+        }
+
+        if (c.Equals("ac3", StringComparison.OrdinalIgnoreCase)
+            || p.Contains("AC-3", StringComparison.OrdinalIgnoreCase)
+            || p.Contains("Dolby Digital", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Dolby Digital";
+        }
+
+        if (c.Equals("dts", StringComparison.OrdinalIgnoreCase))
+        {
+            return "DTS";
+        }
+
+        if (c.Equals("aac", StringComparison.OrdinalIgnoreCase))
+        {
+            return "AAC";
+        }
+
+        if (c.Equals("opus", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Opus";
+        }
+
+        if (c.Equals("flac", StringComparison.OrdinalIgnoreCase))
+        {
+            return "FLAC";
+        }
+
+        if (c.Equals("mp3", StringComparison.OrdinalIgnoreCase))
+        {
+            return "MP3";
+        }
+
+        if (c.Equals("vorbis", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Vorbis";
+        }
+
+        if (c.Equals("pcm_s16le", StringComparison.OrdinalIgnoreCase) || c.Equals("pcm_s24le", StringComparison.OrdinalIgnoreCase)
+            || c.Equals("pcm_s32le", StringComparison.OrdinalIgnoreCase) || c.Equals("pcm_f32le", StringComparison.OrdinalIgnoreCase))
+        {
+            return "PCM";
+        }
+
+        // Unknown codec / unknown profile: fall back to the codec name, or the
+        // profile if the codec is empty (some mpv responses only fill one).
+        return string.IsNullOrEmpty(c) ? p : c;
+    }
+
     public static bool IsPq(string? gamma) =>
         gamma is not null && (gamma.Equals("pq", StringComparison.OrdinalIgnoreCase)
             || gamma.Equals("smpte2084", StringComparison.OrdinalIgnoreCase)

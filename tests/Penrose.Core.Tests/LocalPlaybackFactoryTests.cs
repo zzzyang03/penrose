@@ -112,4 +112,87 @@ public sealed class LocalPlaybackFactoryTests
             File.Delete(path);
         }
     }
+
+    [Fact]
+    public void FromPath_sets_LocalFile_for_regular_file()
+    {
+        string path = Path.Combine(Path.GetTempPath(), "mp-" + Guid.NewGuid().ToString("N") + ".mkv");
+        File.WriteAllBytes(path, [0]);
+        try
+        {
+            PlaybackRequest request = LocalPlaybackFactory.FromPath(path);
+            Assert.Equal(MediaSourceKind.LocalFile, request.SourceKind);
+            Assert.False(request.Uri.IsUnc);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void FromPath_sets_StrmRelay_for_http_strm()
+    {
+        string path = Path.Combine(Path.GetTempPath(), "mp-" + Guid.NewGuid().ToString("N") + ".strm");
+        File.WriteAllText(path, "https://cdn.example/video.mkv");
+        try
+        {
+            PlaybackRequest request = LocalPlaybackFactory.FromPath(path);
+            Assert.Equal(MediaSourceKind.StrmRelay, request.SourceKind);
+            Assert.Equal(Uri.UriSchemeHttps, request.Uri.Scheme);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void FromPath_sets_StrmDirect_for_file_strm()
+    {
+        string filePath = Path.Combine(Path.GetTempPath(), "mp-" + Guid.NewGuid().ToString("N") + ".mkv");
+        File.WriteAllBytes(filePath, [0]);
+        try
+        {
+            string path = Path.Combine(Path.GetTempPath(), "mp-" + Guid.NewGuid().ToString("N") + ".strm");
+            File.WriteAllText(path, filePath);
+            try
+            {
+                PlaybackRequest request = LocalPlaybackFactory.FromPath(path);
+                Assert.Equal(MediaSourceKind.StrmDirect, request.SourceKind);
+                Assert.Equal(Uri.UriSchemeFile, request.Uri.Scheme);
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        }
+        finally
+        {
+            File.Delete(filePath);
+        }
+    }
+
+    [Fact]
+    public void FromUserInput_sets_StrmRelay_for_bare_http_url()
+    {
+        PlaybackRequest request = LocalPlaybackFactory.FromUserInput("https://cdn.example/video.mkv");
+        Assert.Equal(MediaSourceKind.StrmRelay, request.SourceKind);
+    }
+
+    [Fact]
+    public void FromDisc_sets_LocalDisc()
+    {
+        string path = Path.Combine(Path.GetTempPath(), "mp-" + Guid.NewGuid().ToString("N") + ".iso");
+        File.WriteAllBytes(path, [0]);
+        try
+        {
+            PlaybackRequest request = LocalPlaybackFactory.FromDisc(path);
+            Assert.Equal(MediaSourceKind.LocalDisc, request.SourceKind);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
 }
