@@ -120,16 +120,14 @@ public static class FormatBadges
             return DolbyAtmos;
         }
 
+        // Check DTS:X before plain DTS-HD so "DTS-HD MA + DTS:X" picks DTS:X.
         if (p.Contains("DTS:X", StringComparison.OrdinalIgnoreCase) || p.Contains("DTS:X MA", StringComparison.OrdinalIgnoreCase))
         {
             return DtsX;
         }
 
-        if (p.Equals("TrueHD", StringComparison.OrdinalIgnoreCase) || p.Contains("TrueHD", StringComparison.OrdinalIgnoreCase))
-        {
-            return "Dolby TrueHD";
-        }
-
+        // Check DTS-HD MA / DTS-HD before DTS:X so "DTS-HD MA + DTS:X" doesn't
+        // accidentally fall into the DTS:X case above (already handled above).
         if (p.Contains("DTS-HD MA", StringComparison.OrdinalIgnoreCase) || p.Contains("DTS-HD Master Audio", StringComparison.OrdinalIgnoreCase))
         {
             return "DTS-HD MA";
@@ -140,11 +138,23 @@ public static class FormatBadges
             return "DTS-HD";
         }
 
+        // E-AC3 checks come before AC-3 so "Dolby Digital Plus" returns the
+        // E-AC3 label even though it also contains "Dolby Digital".
         if (c.Equals("eac3", StringComparison.OrdinalIgnoreCase)
             || p.Contains("E-AC3", StringComparison.OrdinalIgnoreCase)
             || p.Contains("Enhanced AC-3", StringComparison.OrdinalIgnoreCase))
         {
             return "E-AC3 (Dolby Digital Plus)";
+        }
+
+        if (p.Equals("TrueHD", StringComparison.OrdinalIgnoreCase) || p.Contains("TrueHD", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Dolby TrueHD";
+        }
+
+        if (p.Contains("Dolby Digital Plus", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Dolby Digital Plus";
         }
 
         if (c.Equals("ac3", StringComparison.OrdinalIgnoreCase)

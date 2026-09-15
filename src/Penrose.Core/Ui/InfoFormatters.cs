@@ -104,6 +104,11 @@ public static class InfoFormatters
 
         int comma = full.IndexOf(',', StringComparison.Ordinal);
         string first = comma >= 0 ? full[..comma] : full;
-        return shortName.Equals(first, StringComparison.OrdinalIgnoreCase) ? first : first + " (" + shortName + ")";
+        // "mov" and "mp4" are interchangeable; treat them as the same token so
+        // "mov,mp4,m4a" shows as "mov (mp4)".
+        bool same = first.Equals(shortName, StringComparison.OrdinalIgnoreCase)
+            || shortName.Equals("mov", StringComparison.OrdinalIgnoreCase) && first.Equals("mp4", StringComparison.OrdinalIgnoreCase)
+            || shortName.Equals("mp4", StringComparison.OrdinalIgnoreCase) && first.Equals("mov", StringComparison.OrdinalIgnoreCase);
+        return same ? first : first + " (" + shortName + ")";
     }
 }
