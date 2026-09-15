@@ -242,9 +242,36 @@ public sealed record UiStrings
     public required string EmptyHint { get; init; }
     public required string RecentHeader { get; init; }
     public required string Info { get; init; }
+    public required string InfoPlayback { get; init; }
+    public required string InfoSource { get; init; }
     public required string InfoVideo { get; init; }
     public required string InfoOutput { get; init; }
     public required string InfoAudio { get; init; }
+    public required string InfoKindUnknown { get; init; }
+    public required string InfoKindLocalFile { get; init; }
+    public required string InfoKindLocalDisc { get; init; }
+    public required string InfoKindNetworkShare { get; init; }
+    public required string InfoKindStrmDirect { get; init; }
+    public required string InfoKindStrmRelay { get; init; }
+    public required string InfoKindServerDirect { get; init; }
+    public required string InfoKindServerTranscode { get; init; }
+    public required string InfoLabelCodec { get; init; }
+    public required string InfoLabelContainer { get; init; }
+    public required string InfoLabelSize { get; init; }
+    public required string InfoLabelBitrate { get; init; }
+    public required string InfoLabelChannels { get; init; }
+    public required string InfoLabelSampleRate { get; init; }
+    public required string InfoLabelFps { get; init; }
+    public required string InfoLabelResolution { get; init; }
+    public required string InfoLabelRange { get; init; }
+    public required string InfoLabelUri { get; init; }
+    public required string InfoValueDash { get; init; }
+    public required string InfoFpsWithEffective { get; init; }
+    public required string InfoRangeSdr { get; init; }
+    public required string InfoRangeHdr10 { get; init; }
+    public required string InfoRangeHdr10Plus { get; init; }
+    public required string InfoRangeHlg { get; init; }
+    public required string InfoRangeDolbyVision { get; init; }
     public required string AudioOutput { get; init; }
     public required string ClosePane { get; init; }
     public required string Channels { get; init; }
@@ -493,9 +520,36 @@ public sealed record UiStrings
         EmptyHint = "拖入视频，或从下面选择来源。支持文件夹连播、Blu-ray/DVD 目录、.strm 与网络地址。",
         RecentHeader = "最近播放",
         Info = "播放信息",
+        InfoPlayback = "播放类型",
+        InfoSource = "媒体源",
         InfoVideo = "视频",
         InfoOutput = "输出",
         InfoAudio = "音频",
+        InfoKindUnknown = "未知",
+        InfoKindLocalFile = "本地播放",
+        InfoKindLocalDisc = "光盘播放",
+        InfoKindNetworkShare = "网络共享",
+        InfoKindStrmDirect = "strm 直连",
+        InfoKindStrmRelay = "strm 中继",
+        InfoKindServerDirect = "服务器直连",
+        InfoKindServerTranscode = "服务器转码",
+        InfoLabelCodec = "编码",
+        InfoLabelContainer = "封装",
+        InfoLabelSize = "大小",
+        InfoLabelBitrate = "码率",
+        InfoLabelChannels = "声道",
+        InfoLabelSampleRate = "采样率",
+        InfoLabelFps = "帧率",
+        InfoLabelResolution = "分辨率",
+        InfoLabelRange = "动态范围",
+        InfoLabelUri = "地址",
+        InfoValueDash = "—",
+        InfoFpsWithEffective = "{0} → {1} fps",
+        InfoRangeSdr = "SDR",
+        InfoRangeHdr10 = "HDR10",
+        InfoRangeHdr10Plus = "HDR10+",
+        InfoRangeHlg = "HLG",
+        InfoRangeDolbyVision = "Dolby Vision",
         AudioOutput = "音频输出",
         ClosePane = "关闭面板",
         Channels = "声道",
@@ -745,9 +799,36 @@ public sealed record UiStrings
         EmptyHint = "Drop a video onto the window or pick a source below. Folders play in sequence; Blu-ray/DVD folders, .strm and URLs are supported.",
         RecentHeader = "Recently played",
         Info = "Playback info",
+        InfoPlayback = "Playback",
+        InfoSource = "Source",
         InfoVideo = "Video",
         InfoOutput = "Output",
         InfoAudio = "Audio",
+        InfoKindUnknown = "Unknown",
+        InfoKindLocalFile = "Local file",
+        InfoKindLocalDisc = "Disc",
+        InfoKindNetworkShare = "Network share",
+        InfoKindStrmDirect = ".strm direct",
+        InfoKindStrmRelay = ".strm relay",
+        InfoKindServerDirect = "Server direct play",
+        InfoKindServerTranscode = "Server transcode",
+        InfoLabelCodec = "Codec",
+        InfoLabelContainer = "Container",
+        InfoLabelSize = "Size",
+        InfoLabelBitrate = "Bitrate",
+        InfoLabelChannels = "Channels",
+        InfoLabelSampleRate = "Sample rate",
+        InfoLabelFps = "Frame rate",
+        InfoLabelResolution = "Resolution",
+        InfoLabelRange = "Dynamic range",
+        InfoLabelUri = "URI",
+        InfoValueDash = "—",
+        InfoFpsWithEffective = "{0} → {1} fps",
+        InfoRangeSdr = "SDR",
+        InfoRangeHdr10 = "HDR10",
+        InfoRangeHdr10Plus = "HDR10+",
+        InfoRangeHlg = "HLG",
+        InfoRangeDolbyVision = "Dolby Vision",
         AudioOutput = "Audio output",
         ClosePane = "Close pane",
         Channels = "Channels",
