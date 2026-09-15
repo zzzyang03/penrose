@@ -9,9 +9,34 @@ Simplified Chinese first, then in English.
 
 ## [Unreleased]
 
+### 新增
+
+- 设置页“音频输出”和音轨菜单里新增“音频直通”开关。打开后 AC3 / E-AC3 / DTS / TrueHD 以位流交给功放解码（WASAPI 独占），其他编码仍由播放器按所选输出模式解码；名单内编码未能直通时回退 PCM 并提示。
+
+### 变更
+
+- 输出模式只保留三档 PCM：系统默认、强制立体声、家庭影院 PCM。原来的“位流”模式并入“音频直通”开关，旧设置里的“位流”会自动迁移为“家庭影院 PCM + 音频直通”。
+- 音频直通开启时夜间模式不可用；直通打开但当前音轨仍由播放器解码时，声道下混选择照常可用。
+
 ### 修复
 
 - 窗口失去焦点时不再把 HDR（scRGB）输出切换为 SDR。此前每次切换窗口都会重建交换链，造成短暂黑屏和卡顿；现在窗口在后台时继续以 HDR 播放。
+
+### Added
+
+- An "Audio passthrough" toggle in the settings page (Audio output) and in the
+  audio track menu. When on, AC3 / E-AC3 / DTS / TrueHD are sent as a bitstream
+  for the receiver to decode (WASAPI exclusive); other codecs are still decoded
+  by the player in the selected output mode. A listed codec that fails to pass
+  through falls back to PCM with a prompt.
+
+### Changed
+
+- Output modes are now the three PCM layouts: system default, forced stereo and
+  home-theater PCM. The former "Bitstream" mode became the passthrough toggle;
+  a saved "Bitstream" setting migrates to home-theater PCM with passthrough on.
+- Night mode is unavailable while passthrough is on; the channel downmix picker
+  stays available for tracks the player still decodes.
 
 ### Fixed
 

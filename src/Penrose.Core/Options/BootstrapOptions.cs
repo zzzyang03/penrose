@@ -133,7 +133,7 @@ public sealed record PlaybackPolicyOptions
     public string? AudioDelay { get; init; }
     /// <summary>Null leaves the previous chain. Empty string clears <c>af</c>.</summary>
     public string? Af { get; init; }
-    /// <summary>Bitstream forces this off.</summary>
+    /// <summary>Passthrough forces this off.</summary>
     public bool NightMode { get; init; }
     public string SubFontProvider { get; init; } = "auto";
     public string? SubFontsDir { get; init; }
@@ -144,38 +144,36 @@ public sealed record PlaybackPolicyOptions
     public string? ImageSubsHdrPeak { get; init; }
 
     /// <summary>
-    /// Four strategies. Night mode is a separate toggle.
-    /// Home-theater PCM stays shared; exclusive is a separate WASAPI mode.
+    /// Three PCM strategies; only the channel layout differs. Passthrough
+    /// (<see cref="WithPassthrough"/>) and night mode are separate toggles, so
+    /// the three calls can be chained in any order.
     /// </summary>
     public PlaybackPolicyOptions WithAudioPolicy(Penrose.Core.Playback.AudioPolicy policy) =>
         policy switch
         {
-            Penrose.Core.Playback.AudioPolicy.SystemCompatible => this with
-            {
-                AudioChannels = "auto-safe",
-                AudioExclusive = false,
-                AudioSpdif = "",
-            },
-            Penrose.Core.Playback.AudioPolicy.ForceStereo => this with
-            {
-                AudioChannels = "stereo",
-                AudioExclusive = false,
-                AudioSpdif = "",
-            },
-            Penrose.Core.Playback.AudioPolicy.HomeTheaterPcm => this with
-            {
-                AudioChannels = "7.1,5.1,stereo",
-                AudioExclusive = false,
-                AudioSpdif = "",
-            },
-            Penrose.Core.Playback.AudioPolicy.Bitstream => WithNightMode(false) with
-            {
-                AudioChannels = "auto-safe",
-                AudioExclusive = true,
-                AudioSpdif = "ac3,eac3,dts,dts-hd,truehd",
-            },
-            _ => this,
+            Penrose.Core.Playback.AudioPolicy.ForceStereo => this with { AudioChannels = "stereo" },
+            Penrose.Core.Playback.AudioPolicy.HomeTheaterPcm => this with { AudioChannels = "7.1,5.1,stereo" },
+            _ => this with { AudioChannels = "auto-safe" },
         };
+
+    /// <summary>
+    /// On: codecs in <see cref="Penrose.Core.Playback.AudioPassthrough.SpdifCodecs"/> go to the
+    /// receiver undecoded over exclusive WASAPI; everything else is still decoded
+    /// with the policy's layout. Night mode is cleared because lavfi filters
+    /// cannot take spdif frames. Off: shared mode, no passthrough.
+    /// </summary>
+    public PlaybackPolicyOptions WithPassthrough(bool enabled) =>
+        enabled
+            ? WithNightMode(false) with
+            {
+                AudioExclusive = true,
+                AudioSpdif = Penrose.Core.Playback.AudioPassthrough.SpdifCodecs,
+            }
+            : this with
+            {
+                AudioExclusive = false,
+                AudioSpdif = "",
+            };
 
     public PlaybackPolicyOptions WithNightMode(bool enabled) =>
         this with

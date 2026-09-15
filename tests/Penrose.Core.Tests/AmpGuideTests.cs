@@ -52,13 +52,13 @@ public sealed class AmpGuideTests
     }
 
     [Fact]
-    public void Recommends_bitstream_only_for_hdmi()
+    public void Recommends_passthrough_only_for_hdmi()
     {
-        Assert.Equal(AudioPolicy.Bitstream, AmpGuide.RecommendPolicy(AudioSinkKind.Hdmi, passthrough: true));
-        Assert.Equal(AudioPolicy.HomeTheaterPcm, AmpGuide.RecommendPolicy(AudioSinkKind.Hdmi, passthrough: false));
-        Assert.Equal(AudioPolicy.SystemCompatible, AmpGuide.RecommendPolicy(AudioSinkKind.Speakers, passthrough: true));
-        Assert.Equal(AudioPolicy.ForceStereo, AmpGuide.RecommendPolicy(AudioSinkKind.Speakers, passthrough: false, forceStereo: true));
-        Assert.Equal(AudioPolicy.SystemCompatible, AmpGuide.RecommendPolicy(AudioSinkKind.Auto, passthrough: true));
+        Assert.Equal(new AmpRecommendation(AudioPolicy.HomeTheaterPcm, true), AmpGuide.Recommend(AudioSinkKind.Hdmi, passthrough: true));
+        Assert.Equal(new AmpRecommendation(AudioPolicy.HomeTheaterPcm, false), AmpGuide.Recommend(AudioSinkKind.Hdmi, passthrough: false));
+        Assert.Equal(new AmpRecommendation(AudioPolicy.SystemCompatible, false), AmpGuide.Recommend(AudioSinkKind.Speakers, passthrough: true));
+        Assert.Equal(new AmpRecommendation(AudioPolicy.ForceStereo, false), AmpGuide.Recommend(AudioSinkKind.Speakers, passthrough: false, forceStereo: true));
+        Assert.Equal(new AmpRecommendation(AudioPolicy.SystemCompatible, false), AmpGuide.Recommend(AudioSinkKind.Auto, passthrough: true));
     }
 
     [Fact]
@@ -67,7 +67,7 @@ public sealed class AmpGuideTests
         IReadOnlyDictionary<string, string> properties = new PlaybackPolicyOptions
         {
             AudioDevice = "wasapi/{76bae192-b153-4ad9-94a3-78b36e12c5a0}",
-        }.WithAudioPolicy(AudioPolicy.Bitstream).ToProperties();
+        }.WithAudioPolicy(AudioPolicy.HomeTheaterPcm).WithPassthrough(true).ToProperties();
         Assert.Equal("wasapi/{76bae192-b153-4ad9-94a3-78b36e12c5a0}", properties["audio-device"]);
         Assert.Equal("yes", properties["audio-exclusive"]);
         Assert.True(OptionWhitelist.Validate(OptionLayer.PlaybackPolicy, "audio-device").Accepted);

@@ -155,12 +155,12 @@ public sealed partial class MainWindow
     {
         if (_settingsPage is { } page)
         {
-            WriteSettingsFromPage(page);
+            SimpleSettings previous = WriteSettingsFromPage(page);
             SettingsHost.Children.Clear();
             _settingsPage = null;
             SettingsPanel.Visibility = Visibility.Collapsed;
             ResetPageVisual(SettingsPanel);
-            _ = ApplySettingsEffectsAsync();
+            _ = ApplySettingsEffectsAsync(previous);
         }
 
         _serverBeingEdited = server;
@@ -878,6 +878,7 @@ public sealed partial class MainWindow
         public required ToggleSwitch Gamepad { get; init; }
         public required ToggleSwitch Associate { get; init; }
         public required ToggleSwitch ProgressLine { get; init; }
+        public required ToggleSwitch Passthrough { get; init; }
         public required ComboBox Quality { get; init; }
         public required ComboBox Language { get; init; }
         public required ComboBox Encoding { get; init; }

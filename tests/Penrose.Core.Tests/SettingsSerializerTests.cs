@@ -51,11 +51,19 @@ public sealed class SettingsSerializerTests
     [Fact]
     public void Round_trip_keeps_enums_as_names()
     {
-        SimpleSettings original = new() { AudioPolicy = AudioPolicy.Bitstream, Quality = QualityPreset.Fast, AllowServerFilePaths = true };
+        SimpleSettings original = new()
+        {
+            AudioPolicy = AudioPolicy.HomeTheaterPcm,
+            AudioPassthrough = true,
+            Quality = QualityPreset.Fast,
+            AllowServerFilePaths = true,
+        };
         string json = SimpleSettingsSerializer.ToJson(original);
-        Assert.Contains("\"audioPolicy\":\"Bitstream\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"audioPolicy\":\"HomeTheaterPcm\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"audioPassthrough\":true", json, StringComparison.Ordinal);
         SimpleSettings back = SimpleSettingsSerializer.FromJson(json);
-        Assert.Equal(AudioPolicy.Bitstream, back.AudioPolicy);
+        Assert.Equal(AudioPolicy.HomeTheaterPcm, back.AudioPolicy);
+        Assert.True(back.AudioPassthrough);
         Assert.Equal(QualityPreset.Fast, back.Quality);
         Assert.True(back.AllowServerFilePaths);
     }
@@ -65,5 +73,30 @@ public sealed class SettingsSerializerTests
     {
         Assert.False(new SimpleSettings().AllowServerFilePaths);
         Assert.False(SimpleSettingsSerializer.FromJson("{}").AllowServerFilePaths);
+    }
+
+    [Fact]
+    public void Audio_passthrough_is_off_by_default()
+    {
+        Assert.False(new SimpleSettings().AudioPassthrough);
+        Assert.False(SimpleSettingsSerializer.FromJson("{}").AudioPassthrough);
+        Assert.False(SimpleSettingsSerializer.FromJson("""{"audioPolicy":"HomeTheaterPcm"}""").AudioPassthrough);
+    }
+
+    [Fact]
+    public void Legacy_bitstream_policy_migrates_to_passthrough()
+    {
+        // 0.1.0 / 0.1.1 stored passthrough as a fourth audioPolicy value.
+        SimpleSettings settings = SimpleSettingsSerializer.FromJson("""{"audioPolicy":"Bitstream","volume":42}""");
+        Assert.Equal(AudioPolicy.HomeTheaterPcm, settings.AudioPolicy);
+        Assert.True(settings.AudioPassthrough);
+        Assert.Equal(42, settings.Volume);
+
+        SimpleSettings lowerCase = SimpleSettingsSerializer.FromJson("""{"audioPolicy":"bitstream"}""");
+        Assert.Equal(AudioPolicy.HomeTheaterPcm, lowerCase.AudioPolicy);
+        Assert.True(lowerCase.AudioPassthrough);
+
+        // Written back in the new shape, so the migration runs once.
+        Assert.DoesNotContain("Bitstream", SimpleSettingsSerializer.ToJson(settings), StringComparison.Ordinal);
     }
 }

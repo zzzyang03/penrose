@@ -38,6 +38,22 @@ public sealed class DeviceProfileBuilderTests
     }
 
     [Fact]
+    public void FromRuntime_advertises_bitstream_codecs_only_with_passthrough()
+    {
+        PlaybackCapabilitySnapshot on = DeviceProfileBuilder.FromRuntime(
+            AudioPolicy.HomeTheaterPcm, audioPassthrough: true, "wasapi/{x}", displayIsHdr: false, "d3d11va", gpuAdapterLuid: null);
+        Assert.True(on.BitstreamAllowed);
+        Assert.Equal(["ac3", "eac3", "dts", "truehd"], on.BitstreamCodecs);
+        Assert.Equal("7.1", on.AudioLayout);
+
+        PlaybackCapabilitySnapshot off = DeviceProfileBuilder.FromRuntime(
+            AudioPolicy.ForceStereo, audioPassthrough: false, null, displayIsHdr: false, null, gpuAdapterLuid: null);
+        Assert.False(off.BitstreamAllowed);
+        Assert.Empty(off.BitstreamCodecs);
+        Assert.Equal("stereo", off.AudioLayout);
+    }
+
+    [Fact]
     public void Playback_candidate_headers_stay_file_local()
     {
         PlaybackCandidate candidate = new()

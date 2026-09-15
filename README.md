@@ -59,7 +59,7 @@
 
 **音频**
 
-- 输出模式：系统默认、强制立体声、家庭影院 PCM（5.1 / 7.1）、WASAPI 独占位流直通（失败时自动回退 PCM）
+- 输出模式：系统默认、强制立体声、家庭影院 PCM（5.1 / 7.1）；独立的“音频直通”开关把 AC3 / E-AC3 / DTS / TrueHD 以 WASAPI 独占位流交给功放解码（失败时自动回退 PCM 并提示）
 - 通过 HDMI 连接功放和回音壁的设置向导
 - 声道布局（下混）选择与夜间模式（动态范围压缩）
 
@@ -214,7 +214,7 @@ They are not code-signed yet: if SmartScreen warns on first launch, choose **Mor
 
 **Audio**
 
-- Output modes: system default, forced stereo, home-theater PCM (5.1 / 7.1), and WASAPI exclusive bitstream passthrough with automatic PCM fallback
+- Output modes: system default, forced stereo, home-theater PCM (5.1 / 7.1); a separate audio passthrough toggle sends AC3 / E-AC3 / DTS / TrueHD as a WASAPI exclusive bitstream for the receiver to decode, with automatic PCM fallback and a prompt
 - Setup wizard for AV receivers and soundbars over HDMI
 - Channel layout (downmix) picker and night mode (dynamic range compression)
 
