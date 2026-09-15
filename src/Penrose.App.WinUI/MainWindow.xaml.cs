@@ -1086,6 +1086,7 @@ public sealed partial class MainWindow : Window
         // of startup and leave the library / audio policy uninitialised.
         await ApplySettingGroupAsync("playback policy", () => ApplyPlaybackPolicyAsync(save: false)).ConfigureAwait(true);
         await ApplySettingGroupAsync("quality preset", () => ApplyQualityAsync(save: false)).ConfigureAwait(true);
+        await ApplySettingGroupAsync("decoding", () => ApplyDecodingAsync(save: false)).ConfigureAwait(true);
         await ApplySettingGroupAsync("speed", () => ApplySpeedAsync(save: false)).ConfigureAwait(true);
         await ApplySettingGroupAsync("subtitle delay", () => ApplySubDelayAsync(save: false)).ConfigureAwait(true);
         await ApplySettingGroupAsync("subtitle style", () => ApplySubtitleStyleAsync(save: false)).ConfigureAwait(true);
@@ -4181,6 +4182,20 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private async Task ApplyDecodingAsync(bool save = true)
+    {
+        if (_engine is null)
+        {
+            return;
+        }
+
+        await _engine.ApplyPropertiesAsync(DecodingOptions.ToProperties(_settings.HardwareDecoding)).ConfigureAwait(true);
+        if (save)
+        {
+            await SaveSettingsAsync().ConfigureAwait(true);
+        }
+    }
+
     private async Task<string> MediaTitleAsync()
     {
         if (_engine is null)
@@ -5549,6 +5564,7 @@ public sealed partial class MainWindow : Window
         ToggleSwitch gamepad = Toggle(_settings.GamepadEnabled);
         ToggleSwitch progressLine = Toggle(_settings.FullscreenProgressLine);
         ToggleSwitch passthrough = Toggle(_settings.AudioPassthrough);
+        ToggleSwitch hardwareDecoding = Toggle(_settings.HardwareDecoding);
         ComboBox quality = new() { MinWidth = 160 };
         quality.Items.Add(_ui.QualityFast);
         quality.Items.Add(_ui.QualityBalanced);
@@ -5639,6 +5655,7 @@ public sealed partial class MainWindow : Window
         host.Children.Add(SettingsSection(
             _ui.Video,
             SettingsRow(_ui.PictureQuality, quality),
+            SettingsRow(_ui.HardwareDecoding, hardwareDecoding, _ui.HardwareDecodingHint),
             SettingsRow(_ui.MatchDisplayRefresh, matchRefresh),
             SettingsRow(_ui.AutoEnableWindowsHdr, autoHdr),
             SettingsRow(_ui.SeekThumbnails, thumbs),
@@ -5674,6 +5691,7 @@ public sealed partial class MainWindow : Window
             Associate = associate,
             ProgressLine = progressLine,
             Passthrough = passthrough,
+            HardwareDecoding = hardwareDecoding,
             Quality = quality,
             Language = language,
             Encoding = encoding,
@@ -5703,6 +5721,7 @@ public sealed partial class MainWindow : Window
             Language = page.Language.SelectedIndex == 1 ? "en" : "zh-CN",
             FullscreenProgressLine = page.ProgressLine.IsOn,
             AudioPassthrough = page.Passthrough.IsOn,
+            HardwareDecoding = page.HardwareDecoding.IsOn,
         };
         if (page.Associate.IsOn)
         {
@@ -5721,6 +5740,12 @@ public sealed partial class MainWindow : Window
         ApplyLanguage();
         await ApplyQualityAsync().ConfigureAwait(true);
         await ApplySubtitleStyleAsync().ConfigureAwait(true);
+        if (previous.HardwareDecoding != _settings.HardwareDecoding)
+        {
+            // A new hwdec value reinitialises the video decoder; leave it alone otherwise.
+            await ApplyDecodingAsync().ConfigureAwait(true);
+        }
+
         if (previous.AudioPassthrough != _settings.AudioPassthrough)
         {
             // Rebuilding the AO is not free; only touch audio when the toggle moved.

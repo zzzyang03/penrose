@@ -14,6 +14,7 @@ Simplified Chinese first, then in English.
 - 播放信息面板重新组织为 5 个区块：播放类型（本地 / strm / 服务器直连 / 服务器转码等）、媒体源（封装格式、大小、完整地址）、视频（编码、动态范围、分辨率、帧率、码率）、音频（编码、声道、采样率、码率）、输出。视频和音频码率、帧率在面板打开时以 1 Hz 实时刷新。
 - 设置页“音频输出”和音轨菜单里新增“音频直通”开关。打开后 AC3 / E-AC3 / DTS / TrueHD 以位流交给功放解码（WASAPI 独占），其他编码仍由播放器按所选输出模式解码；名单内编码未能直通时回退 PCM 并提示。
 - 音频延迟调节：播放时按 `Ctrl`+`-` / `Ctrl`+`=`，或在音轨菜单里让声音提前或推后 50 毫秒，修正音画不同步。只对当前文件生效，打开下一个文件时自动归零。
+- 设置页“画面”分区新增“硬件解码”开关，默认开启。遇到花屏、绿屏、黑屏或播放崩溃时可以关闭，改用软件解码；切换后当前播放立即生效，设置会保存。
 
 ### 变更
 
@@ -42,6 +43,9 @@ Simplified Chinese first, then in English.
 - Audio delay: press `Ctrl`+`-` / `Ctrl`+`=` or use the audio track menu to play
   the sound 50 ms earlier or later and fix audio/video sync. It applies to the
   current file only and resets when the next file opens.
+- A "Hardware decoding" toggle in the settings page (Video), on by default. Turn it
+  off to decode in software if you see corrupted, green or black frames or
+  playback crashes; the change applies to the current playback and is saved.
 
 ### Changed
 

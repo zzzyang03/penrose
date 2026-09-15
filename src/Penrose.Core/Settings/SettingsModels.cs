@@ -25,6 +25,11 @@ public sealed record SimpleSettings
     public bool AllowAutomaticFullscreenFallback { get; init; } = true;
     public bool NightMode { get; init; }
     public QualityPreset Quality { get; init; } = QualityPreset.Balanced;
+    /// <summary>
+    /// On lets mpv pick a hardware decoder (<c>hwdec=auto</c>); off decodes on the CPU
+    /// (<c>hwdec=no</c>) for drivers that corrupt or crash. On by default.
+    /// </summary>
+    public bool HardwareDecoding { get; init; } = true;
     public double Speed { get; init; } = 1;
     public double SubDelaySeconds { get; init; }
     public string SubCodepage { get; init; } = "auto";
