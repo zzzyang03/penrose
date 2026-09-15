@@ -9,6 +9,8 @@ Simplified Chinese first, then in English.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-15
+
 ### 新增
 
 - 播放信息面板重新组织为 5 个区块：播放类型（本地 / strm / 服务器直连 / 服务器转码等）、媒体源（封装格式、大小、完整地址）、视频（编码、动态范围、分辨率、帧率、码率）、音频（编码、声道、采样率、码率）、输出。视频和音频码率、帧率在面板打开时以 1 Hz 实时刷新。
@@ -20,7 +22,6 @@ Simplified Chinese first, then in English.
 
 - 输出模式只保留三档 PCM：系统默认、强制立体声、家庭影院 PCM。原来的“位流”模式并入“音频直通”开关，旧设置里的“位流”会自动迁移为“家庭影院 PCM + 音频直通”。
 - 音频直通开启时夜间模式不可用；直通打开但当前音轨仍由播放器解码时，声道下混选择照常可用。
-- 在 `PlaybackRequest` 上引入 `MediaSourceKind SourceKind`，让本地工厂和 Emby / Jellyfin 解析器都明确报告当前播放属于哪一类（本地 / 光盘 / 网络共享 / strm 直连 / strm 中继 / 服务器直连 / 服务器转码），UI 用它来给面板打标签。
 - 首页“影视服务器”按钮换用新的 NAS 图标。
 
 ### 修复
@@ -54,10 +55,6 @@ Simplified Chinese first, then in English.
   a saved "Bitstream" setting migrates to home-theater PCM with passthrough on.
 - Night mode is unavailable while passthrough is on; the channel downmix picker
   stays available for tracks the player still decodes.
-- `PlaybackRequest` now carries a `MediaSourceKind SourceKind` so the local
-  factory and the Emby / Jellyfin parsers can label what is actually playing
-  (local file / disc / network share / .strm direct / .strm relay / server
-  direct play / server transcode); the info overlay reads it to pick its label.
 - The "Media servers" button on the home page has a new NAS icon.
 
 ### Fixed
@@ -127,6 +124,7 @@ First public preview.
   Simplified Chinese UI, and a diagnostics export that redacts secrets.
 - Self-contained portable zip and Velopack installer for Windows x64.
 
-[Unreleased]: https://github.com/zzzyang03/penrose/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/zzzyang03/penrose/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/zzzyang03/penrose/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/zzzyang03/penrose/releases/tag/v0.1.1
 [0.1.0]: https://github.com/zzzyang03/penrose/releases/tag/v0.1.0
