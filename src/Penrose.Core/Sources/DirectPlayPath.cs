@@ -62,7 +62,7 @@ public static class DirectPlayPath
     /// drive, another host). Playing that URL lets mpv follow the 302 itself.
     /// The server <c>DirectStreamUrl</c> is a same-origin proxy: it often cannot
     /// Range-seek a cloud strm, so a short lavf probe misses audio / Dolby Vision
-    /// metadata and a resume lands mid-GOP.
+    /// metadata.
     /// <c>Path</c> is ignored when it is loopback (only the server can open it) or
     /// the same origin as the server (a Download route, not a strm target).
     /// </summary>

@@ -117,10 +117,13 @@ public sealed record PlaybackRequest
         uri is { IsAbsoluteUri: true } && (uri.Scheme == System.Uri.UriSchemeHttp || uri.Scheme == System.Uri.UriSchemeHttps);
 
     /// <summary>
-    /// HTTP resume must not use loadfile <c>start=</c>. That seeks before lavf
-    /// has Matroska Cues, so HEVC / TrueHD land mid-access-unit and playback
-    /// freezes until the user seeks on the slider. Open from byte 0, then seek
-    /// after FILE_LOADED.
+    /// HTTP resume opens from byte 0 and seeks once FILE_LOADED arrives instead
+    /// of passing loadfile <c>start=</c>. It was added for resumes that froze
+    /// until the user dragged the slider; that freeze was later traced to mpv
+    /// stalling after a refused spdif output fell back to PCM (handled in
+    /// <c>MpvPlaybackEngine.LeaveRefusedBitstream</c>), not to <c>start=</c>.
+    /// Kept because it is verified on HTTP sources; local files still use
+    /// <c>start=</c>.
     /// </summary>
     public bool SeekAfterOpen =>
         StartPosition is { Ticks: > 0 } && IsHttp(Uri);
