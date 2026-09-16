@@ -81,6 +81,68 @@ public sealed class MpvPlaybackEngineTests
         await load.WaitAsync(TimeSpan.FromSeconds(2));
     }
 
+    [Theory]
+    [InlineData("truehd")]
+    [InlineData("eac3")]
+    public async Task Refused_bitstream_switches_to_shared_pcm(string codec)
+    {
+        await using EngineHarness harness = await EngineHarness.StartAsync();
+        await harness.LoadAsync();
+        harness.Client.Properties["audio-exclusive"] = "yes";
+        harness.Client.Properties["audio-spdif"] = AudioPassthrough.SpdifCodecs;
+        harness.Client.Properties["audio-codec-name"] = codec;
+
+        PushAoInitFailure(harness);
+
+        await WaitForPropertyAsync(harness, "audio-spdif", "");
+        Assert.Equal("no", harness.Client.Properties["audio-exclusive"]);
+    }
+
+    [Theory]
+    [InlineData("aac", "ac3,eac3,dts,dts-hd,truehd")]
+    [InlineData("truehd", "")]
+    public async Task Ao_failure_without_bitstream_leaves_audio_options_alone(string codec, string spdif)
+    {
+        await using EngineHarness harness = await EngineHarness.StartAsync();
+        await harness.LoadAsync();
+        harness.Client.Properties["audio-exclusive"] = "yes";
+        harness.Client.Properties["audio-spdif"] = spdif;
+        harness.Client.Properties["audio-codec-name"] = codec;
+
+        PushAoInitFailure(harness);
+        // Processed after the log line, so the log has been handled once this lands.
+        harness.PushProperty("pause", flag: true);
+        await harness.WaitForSnapshotAsync(s => s.PlaybackIntent == PlaybackIntent.Paused);
+
+        Assert.Equal("yes", harness.Client.Properties["audio-exclusive"]);
+        Assert.Equal(spdif, harness.Client.Properties["audio-spdif"]);
+    }
+
+    private static void PushAoInitFailure(EngineHarness harness) =>
+        harness.Client.Push(new MpvClientEvent(
+            MpvEventId.LogMessage,
+            ReplyUserdata: 0,
+            Error: 0,
+            LogPrefix: "ao",
+            LogLevel: "error",
+            LogText: "Failed to initialize audio driver 'wasapi'"));
+
+    private static async Task WaitForPropertyAsync(EngineHarness harness, string name, string expected)
+    {
+        DateTime deadline = DateTime.UtcNow.AddSeconds(2);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (harness.Client.Properties.TryGetValue(name, out string? value) && value == expected)
+            {
+                return;
+            }
+
+            await Task.Delay(10);
+        }
+
+        Assert.Fail($"{name} never became '{expected}'");
+    }
+
     [Fact]
     public async Task Eof_reached_with_keep_open_maps_to_ended_and_seeking_back_restores_loaded()
     {

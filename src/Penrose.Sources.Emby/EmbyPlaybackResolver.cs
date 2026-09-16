@@ -67,9 +67,17 @@ public sealed class EmbyPlaybackResolver : IPlaybackResolver
     /// </summary>
     private PlaybackCandidate AttachToken(PlaybackCandidate parsed)
     {
-        if (string.IsNullOrEmpty(_client.AccessToken)
-            || parsed.Uri.IsFile
-            || !HttpQueryAuth.IsSameOrigin(parsed.Uri, _client.BaseAddress))
+        if (parsed.Uri.IsFile)
+        {
+            return parsed;
+        }
+
+        if (!HttpQueryAuth.IsSameOrigin(parsed.Uri, _client.BaseAddress))
+        {
+            return parsed with { Headers = HttpQueryAuth.WithoutServerCredentials(parsed.Headers) };
+        }
+
+        if (string.IsNullOrEmpty(_client.AccessToken))
         {
             return parsed;
         }

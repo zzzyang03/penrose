@@ -82,6 +82,9 @@ public sealed class MpvPlaybackEngine : IPlaybackEngine
         _client.ObserveProperty("eof-reached", MpvFormat.Flag);
         _client.ObserveProperty("time-pos", MpvFormat.Double);
         _client.ObserveProperty("duration", MpvFormat.Double);
+        // JSON string: audio / Dolby Vision tracks often appear after FILE_LOADED
+        // on a cloud strm whose header was not in the first probe window.
+        _client.ObserveProperty("track-list", MpvFormat.String);
         // mpv's own warnings (and, when asked, its verbose stream / demuxer trace)
         // land in the app log instead of vanishing.
         if (!string.IsNullOrWhiteSpace(_engineOptions.MpvLogLevel) && _engineOptions.MpvLogLevel != "no")
@@ -398,6 +401,12 @@ public sealed class MpvPlaybackEngine : IPlaybackEngine
                             _logger.LogError("mpv[{Prefix}] {Text}", evt.LogPrefix, evt.LogText);
                             // The first error of a load is the root cause; later ones are consequences.
                             _lastErrorLog ??= evt.LogPrefix + ": " + evt.LogText;
+                            if (evt.LogPrefix == "ao"
+                                && evt.LogText.StartsWith("Failed to initialize audio driver", StringComparison.Ordinal))
+                            {
+                                LeaveRefusedBitstream();
+                            }
+
                             break;
                         case "warn":
                             _logger.LogWarning("mpv[{Prefix}] {Text}", evt.LogPrefix, evt.LogText);
@@ -582,6 +591,31 @@ public sealed class MpvPlaybackEngine : IPlaybackEngine
         _client.SetProperty(
             "disc-title",
             title.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    }
+
+    /// <summary>
+    /// When the device refuses the spdif format (laptop speakers, a TV without
+    /// the codec), mpv logs an AO init failure and falls back to PCM, but this
+    /// libmpv build never feeds the new PCM decoder: audio and video sit at the
+    /// current position until something reinitializes the audio chain. A seek
+    /// does, but reopens exclusive PCM (stereo on most devices); turning off
+    /// exclusive alone retries spdif and stalls again. Leaving spdif and
+    /// exclusive off for this file restarts shared-mode PCM with the full
+    /// layout. The host re-applies the user's passthrough setting on the next
+    /// load and reports the fallback once <c>audio-out-params</c> shows PCM.
+    /// </summary>
+    private void LeaveRefusedBitstream()
+    {
+        string? spdif = _client.GetPropertyString("audio-spdif");
+        string? codec = _client.GetPropertyString("audio-codec-name");
+        if (string.IsNullOrEmpty(spdif) || !AudioPassthrough.IsPassthroughCodec(codec))
+        {
+            return;
+        }
+
+        _client.SetProperty("audio-exclusive", "no");
+        _client.SetProperty("audio-spdif", "");
+        _logger.LogInformation("Audio: device refused bitstream codec={Codec}; switched to shared PCM", codec);
     }
 
     private void ApplyTracksFromClient(long generation)

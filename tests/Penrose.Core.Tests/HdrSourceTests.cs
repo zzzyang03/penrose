@@ -17,4 +17,14 @@ public sealed class HdrSourceTests
     {
         Assert.Equal(hdr, HdrSource.IsTransferHdr(gamma));
     }
+
+    [Fact]
+    public void Dolby_vision_profile_is_hdr_even_without_pq_gamma()
+    {
+        Assert.True(HdrSource.IsSourceHdr(gamma: null, dolbyVisionProfile: 5));
+        Assert.True(HdrSource.IsSourceHdr("srgb", dolbyVisionProfile: 8));
+        Assert.False(HdrSource.IsSourceHdr(gamma: null, dolbyVisionProfile: null));
+        Assert.False(HdrSource.IsSourceHdr("srgb", dolbyVisionProfile: 0));
+        Assert.True(HdrSource.IsSourceHdr("pq", dolbyVisionProfile: null));
+    }
 }

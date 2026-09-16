@@ -88,6 +88,30 @@ public static class HttpQueryAuth
         return string.IsNullOrWhiteSpace(value) ? null : value;
     }
 
+    /// <summary>
+    /// Drops media-server credentials so they are not sent to an OpenList / cloud
+    /// URL (and not forwarded on the subsequent 302).
+    /// </summary>
+    public static IReadOnlyDictionary<string, string> WithoutServerCredentials(
+        IReadOnlyDictionary<string, string> headers)
+    {
+        ArgumentNullException.ThrowIfNull(headers);
+        Dictionary<string, string> kept = new(StringComparer.OrdinalIgnoreCase);
+        foreach ((string key, string value) in headers)
+        {
+            if (key.Equals("X-Emby-Token", StringComparison.OrdinalIgnoreCase)
+                || key.Equals("X-MediaBrowser-Token", StringComparison.OrdinalIgnoreCase)
+                || key.Equals("Authorization", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            kept[key] = value;
+        }
+
+        return kept;
+    }
+
     public static bool IsReadableFile(Uri uri)
     {
         ArgumentNullException.ThrowIfNull(uri);

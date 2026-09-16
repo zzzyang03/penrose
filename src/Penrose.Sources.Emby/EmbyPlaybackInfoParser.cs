@@ -116,13 +116,11 @@ public static class EmbyPlaybackInfoParser
         }
 
         // Path is only a URL when it is an absolute http(s) URL (strm targets); a
-        // '/'-prefixed Path is the server's Linux filesystem, not a route.
-        string? remote = DirectPlayPath.LooksLikeRemoteUrl(directUrl)
-            ? directUrl
-            : DirectPlayPath.IsHttpUrl(path)
-                ? path
-                : null;
-        if ((directPlay || directStream) && remote is not null)
+        // '/'-prefixed Path is the server's Linux filesystem, not a route. An
+        // OpenList / cloud Path is preferred over DirectStreamUrl so mpv follows
+        // the 302 itself (see DirectPlayPath.TryChooseRemotePlay).
+        if ((directPlay || directStream)
+            && DirectPlayPath.TryChooseRemotePlay(path, directUrl, serverBase, out string remote, out MediaSourceKind remoteKind))
         {
             return new PlaybackCandidate
             {
@@ -136,7 +134,7 @@ public static class EmbyPlaybackInfoParser
                 ExternalSubtitles = subs,
                 ServerPath = path,
                 SupportsPathMapping = DirectPlayPath.LooksLikeFile(protocol, path),
-                SourceKind = MediaSourceKind.ServerDirectPlay,
+                SourceKind = remoteKind,
             };
         }
 

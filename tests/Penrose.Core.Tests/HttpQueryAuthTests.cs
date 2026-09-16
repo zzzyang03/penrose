@@ -44,4 +44,19 @@ public sealed class HttpQueryAuthTests
         string missing = Path.Combine(Path.GetTempPath(), "mp-missing-" + Guid.NewGuid().ToString("N") + ".ass");
         Assert.False(HttpQueryAuth.IsReadableFile(new Uri(Path.GetFullPath(missing))));
     }
+
+    [Fact]
+    public void Without_server_credentials_drops_tokens_and_keeps_other_headers()
+    {
+        IReadOnlyDictionary<string, string> kept = HttpQueryAuth.WithoutServerCredentials(
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["X-Emby-Token"] = "secret",
+                ["Authorization"] = "MediaBrowser Token=secret",
+                ["User-Agent"] = "Penrose",
+            });
+        Assert.False(kept.ContainsKey("X-Emby-Token"));
+        Assert.False(kept.ContainsKey("Authorization"));
+        Assert.Equal("Penrose", kept["User-Agent"]);
+    }
 }

@@ -52,6 +52,8 @@ public sealed class JellyfinPlaybackInfoParserTests
         Assert.Equal(PlayMethod.DirectPlay, candidate.Method);
         Assert.Equal("sess-jf", candidate.PlaySessionId);
         Assert.Equal("jellyfin", candidate.ProviderId);
+        Assert.Equal(new Uri("https://jf.example/videos/abc/stream.mkv"), candidate.Uri);
+        Assert.Equal(MediaSourceKind.ServerDirectPlay, candidate.SourceKind);
         Assert.Equal("MediaBrowser Token=secret-token", candidate.Headers["Authorization"]);
         ExternalSubtitle sub = Assert.Single(candidate.ExternalSubtitles);
         Assert.Equal(new Uri("https://jf.example/Items/abc/Subtitles/2/Stream.ass"), sub.Uri);

@@ -35,6 +35,7 @@ public sealed record UiStrings
     public required string AudioHomePcm { get; init; }
     public required string AudioBitstream { get; init; }
     public required string AudioBitstreamPcm { get; init; }
+    public required string ChannelPcm { get; init; }
     public required string AudioPassthrough { get; init; }
     public required string AudioPassthroughHint { get; init; }
     public required string NightBlockedByPassthrough { get; init; }
@@ -319,6 +320,7 @@ public sealed record UiStrings
         AudioHomePcm = "环绕 PCM",
         AudioBitstream = "位流",
         AudioBitstreamPcm = "位流→PCM",
+        ChannelPcm = "{0} PCM",
         AudioPassthrough = "音频直通",
         AudioPassthroughHint = "AC3 / E-AC3 / DTS / TrueHD 以位流交给功放解码（WASAPI 独占，软件音量可能无效）；其他编码仍由播放器解码。开启后夜间模式不可用。",
         NightBlockedByPassthrough = "音频直通开启时无法使用夜间模式",
@@ -604,6 +606,7 @@ public sealed record UiStrings
         AudioHomePcm = "Surround",
         AudioBitstream = "Bitstream",
         AudioBitstreamPcm = "Bitstream→PCM",
+        ChannelPcm = "{0} PCM",
         AudioPassthrough = "Audio passthrough",
         AudioPassthroughHint = "AC3 / E-AC3 / DTS / TrueHD are sent as a bitstream for the receiver to decode (WASAPI exclusive; software volume may not work); other codecs are still decoded by the player. Night mode is unavailable while on.",
         NightBlockedByPassthrough = "Night mode is unavailable while audio passthrough is on",

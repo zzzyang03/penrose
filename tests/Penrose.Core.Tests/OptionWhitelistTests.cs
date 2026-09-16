@@ -177,14 +177,28 @@ public sealed class OptionWhitelistTests
         PlaybackRequest remote = new() { RequestId = Guid.NewGuid(), Uri = new Uri("https://emby.example/videos/1/original.mkv") };
         IReadOnlyDictionary<string, string> options = remote.ToFileLocalOptions();
         Assert.Contains("reconnect=1", options["stream-lavf-o"], StringComparison.Ordinal);
-        Assert.Equal("2000000", options["demuxer-lavf-probesize"]);
-        Assert.Equal("2", options["demuxer-lavf-analyzeduration"]);
+        Assert.Equal("10000000", options["demuxer-lavf-probesize"]);
+        Assert.Equal("6", options["demuxer-lavf-analyzeduration"]);
         // Never as a global property: the key stays on the file-local list.
         Assert.True(OptionWhitelist.IsNetworkCredentialKey("stream-lavf-o"));
 
         PlaybackRequest local = new() { RequestId = Guid.NewGuid(), Uri = new Uri("file:///D:/movie.mkv") };
         Assert.False(local.ToFileLocalOptions().ContainsKey("stream-lavf-o"));
         Assert.False(local.ToFileLocalOptions().ContainsKey("demuxer-lavf-probesize"));
+    }
+
+    [Theory]
+    [InlineData("https://emby.example/videos/1/original.mkv")]
+    [InlineData("file:///D:/movie.mkv")]
+    public void Resume_position_is_a_loadfile_start_option(string uri)
+    {
+        PlaybackRequest request = new()
+        {
+            RequestId = Guid.NewGuid(),
+            Uri = new Uri(uri),
+            StartPosition = TimeSpan.FromSeconds(189.6),
+        };
+        Assert.Equal("189.6", request.ToFileLocalOptions()["start"]);
     }
 
     [Fact]

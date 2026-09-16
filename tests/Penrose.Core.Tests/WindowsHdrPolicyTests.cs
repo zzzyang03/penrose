@@ -18,4 +18,12 @@ public sealed class WindowsHdrPolicyTests
         Assert.False(WindowsHdrPolicy.ShouldEnable(
             settingOn: true, sourceHdr: true, advancedColorSupported: false, advancedColorEnabled: false));
     }
+
+    [Fact]
+    public void Refresh_pipeline_when_source_is_hdr_and_windows_hdr_is_already_on()
+    {
+        Assert.True(WindowsHdrPolicy.ShouldRefreshPipeline(sourceHdr: true, advancedColorEnabled: true));
+        Assert.False(WindowsHdrPolicy.ShouldRefreshPipeline(sourceHdr: true, advancedColorEnabled: false));
+        Assert.False(WindowsHdrPolicy.ShouldRefreshPipeline(sourceHdr: false, advancedColorEnabled: true));
+    }
 }

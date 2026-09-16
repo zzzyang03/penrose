@@ -37,6 +37,29 @@ public sealed class PropertyObservationTests
     }
 
     [Fact]
+    public async Task Track_list_is_observed_as_a_string()
+    {
+        await using EngineHarness harness = await EngineHarness.StartAsync();
+        Assert.Equal(MpvFormat.String, harness.Client.Observed["track-list"]);
+    }
+
+    [Fact]
+    public async Task Track_list_updates_reach_the_snapshot_after_file_loaded()
+    {
+        await using EngineHarness harness = await EngineHarness.StartAsync();
+        await harness.LoadAsync();
+
+        harness.PushProperty(
+            "track-list",
+            text: """[{"id":1,"type":"audio","selected":true,"codec":"eac3"}]""");
+        PlaybackSnapshot snapshot = await harness.WaitForSnapshotAsync(s => s.Tracks.Count > 0);
+        TrackInfo audio = Assert.Single(snapshot.Tracks);
+        Assert.Equal("audio", audio.Type);
+        Assert.Equal("eac3", audio.Codec);
+        Assert.True(audio.Selected);
+    }
+
+    [Fact]
     public async Task Paused_for_cache_reaches_the_snapshot_and_clears()
     {
         await using EngineHarness harness = await EngineHarness.StartAsync();

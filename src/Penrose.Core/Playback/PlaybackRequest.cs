@@ -93,20 +93,21 @@ public sealed record PlaybackRequest
     }
 
     /// <summary>
-    /// File-local tuning for HTTP(S) media. Measured against a public Emby: every
-    /// cold region of a file costs 3–7 s on the server and every new connection
-    /// ~1.4 s, so the open phase must not read more than it needs and must survive
-    /// the odd dropped connection instead of failing the load. (This libmpv opens
-    /// https through its curl stream, so <c>stream-lavf-o</c> only covers builds
-    /// and URLs that fall back to FFmpeg's http.)
+    /// File-local tuning for HTTP(S) media. Reconnect survives a dropped cloud
+    /// 302. The lavf probe must be large enough to see audio and Dolby Vision in a
+    /// 4K remux / WEB-DL after OpenList redirects; 2 MiB / 2 s (below FFmpeg's
+    /// 5 MiB / 5 s default) missed those streams and started the file silent.
+    /// These caps are maxima: a complete header still finishes as soon as lavf
+    /// has every stream. (This libmpv opens https through its curl stream, so
+    /// <c>stream-lavf-o</c> only covers builds and URLs that fall back to FFmpeg's
+    /// http.)
     /// </summary>
     public static readonly IReadOnlyDictionary<string, string> NetworkOpenOptions = new Dictionary<string, string>(StringComparer.Ordinal)
     {
         // FFmpeg http: reconnect on drops / transient network errors, with backoff.
         ["stream-lavf-o"] = "reconnect=1,reconnect_on_network_error=1,reconnect_delay_max=5",
-        // Stream info from the first 2 MiB / 2 s instead of FFmpeg's 5 MiB / 5 s.
-        ["demuxer-lavf-probesize"] = "2000000",
-        ["demuxer-lavf-analyzeduration"] = "2",
+        ["demuxer-lavf-probesize"] = "10000000",
+        ["demuxer-lavf-analyzeduration"] = "6",
     };
 
     public static bool IsHttp(Uri uri) =>

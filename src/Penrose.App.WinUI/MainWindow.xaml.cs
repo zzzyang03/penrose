@@ -1445,6 +1445,7 @@ public sealed partial class MainWindow : Window
             _progressKey = progressKey;
             HideError();
             await ResetAudioDelayAsync().ConfigureAwait(true);
+            await RestorePassthroughForNewFileAsync().ConfigureAwait(true);
             PlaybackSnapshot loaded = await _engine.LoadAsync(request).ConfigureAwait(true);
             Log.Information(
                 "Play: loaded {Name} generation={Generation} duration={Duration} start={Start}",
@@ -1466,7 +1467,6 @@ public sealed partial class MainWindow : Window
             await MaybePickDiscTitleAsync(path).ConfigureAwait(true);
             StartSubtitleMatch(path);
             RefreshPlaylistPane();
-            await MaybeApplyWindowsHdrAsync().ConfigureAwait(true);
             await MatchDisplayRefreshAsync().ConfigureAwait(true);
             await MaybeApplyFullscreenAfterLoadAsync().ConfigureAwait(true);
             await RefreshStatusAsync().ConfigureAwait(true);
@@ -2166,37 +2166,67 @@ public sealed partial class MainWindow : Window
         await ApplyDisplayFpsAsync().ConfigureAwait(true);
     }
 
-    private async Task MaybeApplyWindowsHdrAsync()
+    private async Task MaybeApplyWindowsHdrAsync(string? gamma, int? dolbyVisionProfile)
     {
         if (!_settings.AutoEnableWindowsHdr || _engine is null)
         {
             return;
         }
 
-        string? gamma = await _engine.GetPropertyStringAsync("video-params/gamma").ConfigureAwait(true);
+        int ticket = _badgeTicket;
+        long generation = _engine.Snapshot.PlaybackGeneration;
+        bool sourceHdr = HdrSource.IsSourceHdr(gamma, dolbyVisionProfile);
         WindowsAdvancedColor.AdvancedColorState state = WindowsAdvancedColor.StateForWindow(_hwnd);
-        if (!WindowsHdrPolicy.ShouldEnable(
-                _settings.AutoEnableWindowsHdr,
-                HdrSource.IsTransferHdr(gamma),
-                state.Supported,
-                state.Enabled))
+        bool enable = WindowsHdrPolicy.ShouldEnable(
+            _settings.AutoEnableWindowsHdr,
+            sourceHdr,
+            state.Supported,
+            state.Enabled);
+        bool refresh = WindowsHdrPolicy.ShouldRefreshPipeline(sourceHdr, state.Enabled);
+        Log.Information(
+            "HDR: source={SourceHdr} gamma={Gamma} dv={DolbyVision} windows={Enabled} enable={Enable} refresh={Refresh}",
+            sourceHdr,
+            gamma,
+            dolbyVisionProfile,
+            state.Enabled,
+            enable,
+            refresh);
+        if (!enable && !refresh)
         {
             return;
         }
 
-        if (!WindowsAdvancedColor.TrySetForWindow(_hwnd, enable: true, out WindowsAdvancedColor.AdvancedColorTarget target))
+        if (enable)
         {
-            return;
+            if (!WindowsAdvancedColor.TrySetForWindow(_hwnd, enable: true, out WindowsAdvancedColor.AdvancedColorTarget target))
+            {
+                return;
+            }
+
+            _hdrTarget = target;
+            await Task.Delay(400).ConfigureAwait(true);
+            if (_engine is null
+                || ticket != _badgeTicket
+                || _engine.Snapshot.PlaybackGeneration != generation)
+            {
+                return;
+            }
         }
 
-        _hdrTarget = target;
-        await Task.Delay(400).ConfigureAwait(true);
         if (_surface is not null && !_surface.IsTopLevel && !_surface.IsBusy)
         {
             await _surface.RefreshOutputPipelineAsync().ConfigureAwait(true);
         }
 
-        ShowOsd(_ui.HdrOnOsd);
+        // A display-mode change can invalidate an exclusive WASAPI stream on an
+        // HDMI endpoint. Re-push the audio policy once the swap chain is back.
+        await ApplyPlaybackPolicyAsync(save: false).ConfigureAwait(true);
+        await SettleAudioAsync().ConfigureAwait(true);
+
+        if (enable)
+        {
+            ShowOsd(_ui.HdrOnOsd);
+        }
     }
 
     private async Task RestoreWindowsHdrAsync()
@@ -2293,6 +2323,8 @@ public sealed partial class MainWindow : Window
     /// <summary>Pushes a changed <see cref="SimpleSettings.AudioPassthrough"/> to mpv and reads the chain back.</summary>
     private async Task ApplyPassthroughChangedAsync()
     {
+        _bitstreamFallback = false;
+        HintBanner.IsOpen = false;
         await ApplyPlaybackPolicyAsync().ConfigureAwait(true);
         await SettleAudioAsync().ConfigureAwait(true);
     }
@@ -2341,11 +2373,7 @@ public sealed partial class MainWindow : Window
         }
         else
         {
-            string? source = await _engine.GetPropertyStringAsync("audio-params/hr-channels").ConfigureAwait(true);
-            string? sourceCount = await _engine.GetPropertyStringAsync("audio-params/channel-count").ConfigureAwait(true);
-            string? output = await _engine.GetPropertyStringAsync("audio-out-params/hr-channels").ConfigureAwait(true);
-            string? outputCount = await _engine.GetPropertyStringAsync("audio-out-params/channel-count").ConfigureAwait(true);
-            label = ChannelLayouts.Describe(source, ParseInt(sourceCount), output, ParseInt(outputCount));
+            label = await ReadPcmChannelLabelAsync().ConfigureAwait(true);
         }
 
         // Permanent while a file is loaded: "—" until the audio chain reports, or for
@@ -2353,6 +2381,33 @@ public sealed partial class MainWindow : Window
         ChannelsText.Text = label ?? "\u2014";
         ChannelsButton.Visibility = Visibility.Visible;
         Label(ChannelsButton, label is null ? _ui.Channels : _ui.Channels + "  " + label);
+    }
+
+    private async Task<string?> ReadPcmLayoutAsync()
+    {
+        if (_engine is null)
+        {
+            return null;
+        }
+
+        string? source = await _engine.GetPropertyStringAsync("audio-params/hr-channels").ConfigureAwait(true);
+        string? sourceCount = await _engine.GetPropertyStringAsync("audio-params/channel-count").ConfigureAwait(true);
+        string? output = await _engine.GetPropertyStringAsync("audio-out-params/hr-channels").ConfigureAwait(true);
+        string? outputCount = await _engine.GetPropertyStringAsync("audio-out-params/channel-count").ConfigureAwait(true);
+        return ChannelLayouts.Describe(source, ParseInt(sourceCount), output, ParseInt(outputCount));
+    }
+
+    private async Task<string?> ReadPcmChannelLabelAsync()
+    {
+        string? layout = await ReadPcmLayoutAsync().ConfigureAwait(true);
+        if (layout is null || !_bitstreamFallback)
+        {
+            return layout;
+        }
+
+        // Bitstream chip is "位流"; PCM fallback must not look like passthrough
+        // succeeded. Arrow only appears when downmixing (7.1 → 2.0).
+        return string.Format(System.Globalization.CultureInfo.InvariantCulture, _ui.ChannelPcm, layout);
     }
 
     private DynamicRange _currentRange = DynamicRange.Sdr;
@@ -2435,8 +2490,10 @@ public sealed partial class MainWindow : Window
     private int _badgeTicket;
 
     /// <summary>
-    /// Format chips after a load: video-params are only known once the first frame
-    /// is decoded, so poll a few times before giving up on the video side.
+    /// Format chips after a load: video-params and the track list on a cloud strm
+    /// are often still empty at FILE_LOADED, so poll until gamma / Dolby Vision /
+    /// audio appear (or a few seconds elapse). Also applies Windows HDR and
+    /// selects a late audio track from here, so those wait for the same probe.
     /// </summary>
     private async Task ShowFormatBadgesAsync()
     {
@@ -2451,8 +2508,11 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        // video-params and track-list on a cloud strm often arrive after FILE_LOADED.
+        // Six tries (1.5 s) was enough for a local file and too short for OpenList 302.
         string? gamma = null;
-        for (int attempt = 0; attempt < 6 && gamma is null; attempt++)
+        IReadOnlyList<TrackInfo> tracks = [];
+        for (int attempt = 0; attempt < 24; attempt++)
         {
             if (attempt > 0)
             {
@@ -2465,9 +2525,18 @@ public sealed partial class MainWindow : Window
             }
 
             gamma = await _engine.GetPropertyStringAsync("video-params/gamma").ConfigureAwait(true);
+            tracks = TrackListParser.Parse(
+                await _engine.GetPropertyStringAsync("track-list").ConfigureAwait(true));
             if (gamma is null && await _engine.GetPropertyStringAsync("vid").ConfigureAwait(true) is null or "no")
             {
                 break; // audio-only
+            }
+
+            int? dv = tracks.FirstOrDefault(t => t.Type == "video")?.DolbyVisionProfile;
+            bool hasAudio = tracks.Any(t => t.Type == "audio");
+            if ((gamma is not null || HdrSource.IsSourceHdr(gamma, dv)) && hasAudio)
+            {
+                break;
             }
         }
 
@@ -2476,12 +2545,27 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        if (tracks.Any(t => t.Type == "audio")
+            && tracks.All(t => t.Type != "audio" || !t.Selected))
+        {
+            Log.Information("Play: audio tracks present but none selected; setting aid=auto");
+            await _engine.ExecuteCommandAsync(["set", "aid", "auto"]).ConfigureAwait(true);
+            tracks = TrackListParser.Parse(
+                await _engine.GetPropertyStringAsync("track-list").ConfigureAwait(true));
+        }
+
+        int? dolbyVision = tracks.FirstOrDefault(t => t.Type == "video")?.DolbyVisionProfile;
+        await MaybeApplyWindowsHdrAsync(gamma, dolbyVision).ConfigureAwait(true);
+        if (ticket != _badgeTicket || _engine is null)
+        {
+            return;
+        }
+
         string? primaries = await _engine.GetPropertyStringAsync("video-params/primaries").ConfigureAwait(true);
         int? width = ParseInt(await _engine.GetPropertyStringAsync("video-params/w").ConfigureAwait(true));
         int? height = ParseInt(await _engine.GetPropertyStringAsync("video-params/h").ConfigureAwait(true));
-        IReadOnlyList<TrackInfo> tracks = TrackListParser.Parse(
-            await _engine.GetPropertyStringAsync("track-list").ConfigureAwait(true));
-        TrackInfo? video = tracks.FirstOrDefault(t => t.Type == "video" && t.Selected);
+        TrackInfo? video = tracks.FirstOrDefault(t => t.Type == "video" && t.Selected)
+            ?? tracks.FirstOrDefault(t => t.Type == "video");
         TrackInfo? audio = tracks.FirstOrDefault(t => t.Type == "audio" && t.Selected);
         // mpv only publishes scene-max-* when the stream carries HDR10+ (ST 2094-40) metadata.
         bool hdr10Plus = false;
@@ -2507,11 +2591,30 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        Log.Information(
+            "Play: format {Badges} range={Range} gamma={Gamma} primaries={Primaries} size={Width}x{Height} dv={DolbyVisionProfile} hdr10plus={Hdr10Plus} acodec={AudioCodec} profile={AudioProfile}",
+            badges.Count == 0 ? "(none)" : string.Join(" | ", badges),
+            _currentRange,
+            gamma,
+            primaries,
+            width,
+            height,
+            video?.DolbyVisionProfile,
+            hdr10Plus,
+            audio?.Codec,
+            audio?.CodecProfile);
+
         FormatBadgeStrip.Children.Clear();
         TitleBadges.Children.Clear();
         if (badges.Count == 0)
         {
             FormatBadgeStrip.Visibility = Visibility.Collapsed;
+            await Task.Delay(TimeSpan.FromSeconds(2)).ConfigureAwait(true);
+            if (ticket == _badgeTicket)
+            {
+                await RefreshChannelsAsync().ConfigureAwait(true);
+            }
+
             return;
         }
 
@@ -2528,9 +2631,6 @@ public sealed partial class MainWindow : Window
         SetName(TitleBadges, summary);
         FormatBadgeStrip.Opacity = 1;
         FormatBadgeStrip.Visibility = Visibility.Visible;
-        Log.Information(
-            "Play: format {Badges} range={Range} gamma={Gamma} primaries={Primaries} size={Width}x{Height} dv={DolbyVisionProfile} hdr10plus={Hdr10Plus} acodec={AudioCodec} profile={AudioProfile}",
-            string.Join(" | ", badges), _currentRange, gamma, primaries, width, height, video?.DolbyVisionProfile, hdr10Plus, audio?.Codec, audio?.CodecProfile);
         // The AO reports its output layout a little after the first frames; refresh
         // the transport-bar chip once more so "7.1 → 5.1" is not missed.
         await Task.Delay(TimeSpan.FromSeconds(2)).ConfigureAwait(true);
@@ -2549,15 +2649,22 @@ public sealed partial class MainWindow : Window
 
     private IReadOnlyList<string> _currentBadges = [];
 
-    private async Task ApplyPlaybackPolicyAsync(bool save = true)
+    private async Task ApplyPlaybackPolicyAsync(bool save = true, bool? passthrough = null)
     {
         if (_engine is null)
         {
             return;
         }
 
-        bool passthrough = _settings.AudioPassthrough;
-        if (passthrough)
+        bool usePassthrough = passthrough ?? _settings.AudioPassthrough;
+        // Stay in shared PCM until the next file (or the user toggles passthrough).
+        // Re-applying exclusive here would reopen stereo-only WASAPI exclusive.
+        if (passthrough is null && _bitstreamFallback)
+        {
+            usePassthrough = false;
+        }
+
+        if (usePassthrough)
         {
             _night = false;
         }
@@ -2570,7 +2677,7 @@ public sealed partial class MainWindow : Window
             AudioDevice = string.IsNullOrWhiteSpace(_settings.AudioDevice) ? null : _settings.AudioDevice,
         }
             .WithAudioPolicy(_audioPolicy)
-            .WithPassthrough(passthrough)
+            .WithPassthrough(usePassthrough)
             .WithNightMode(_night);
         // User downmix from the transport bar overrides the policy's layout. mpv only
         // applies audio-channels to PCM, so a bitstreamed track is unaffected.
@@ -2588,6 +2695,17 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
+    /// A previous file's bitstream fallback left exclusive off. Restore the user's
+    /// passthrough setting before the next loadfile so TrueHD can try SPDIF again.
+    /// </summary>
+    private async Task RestorePassthroughForNewFileAsync()
+    {
+        _bitstreamFallback = false;
+        HintBanner.IsOpen = false;
+        await ApplyPlaybackPolicyAsync(save: false).ConfigureAwait(true);
+    }
+
+    /// <summary>
     /// Whether the current track really leaves as spdif, and whether a passthrough
     /// codec unexpectedly came out as PCM (an AAC track decoding locally is not a
     /// fallback). Runs from <see cref="RefreshChannelsAsync"/>, so loads, track
@@ -2598,8 +2716,9 @@ public sealed partial class MainWindow : Window
         bool spdif = false;
         bool fallback = false;
         string? format = null;
-        if (_engine is not null
-            && _engine.Snapshot.MediaPhase is not (MediaPhase.Empty or MediaPhase.Opening or MediaPhase.Failed))
+        bool loaded = _engine is not null
+            && _engine.Snapshot.MediaPhase is not (MediaPhase.Empty or MediaPhase.Opening or MediaPhase.Failed);
+        if (loaded && _engine is not null)
         {
             format = await _engine.GetPropertyStringAsync("audio-out-params/format").ConfigureAwait(true);
             spdif = AudioPassthrough.IsSpdifFormat(format);
@@ -2611,6 +2730,15 @@ public sealed partial class MainWindow : Window
         }
 
         _spdifActive = spdif;
+        if (loaded && _bitstreamFallback && string.IsNullOrWhiteSpace(format))
+        {
+            // The AO is reopening (e.g. the shared-PCM push below). An empty format
+            // is not a recovered bitstream; re-enabling exclusive here would retry
+            // spdif on a device that already refused it.
+            return;
+        }
+
+        bool wasFallback = _bitstreamFallback;
         if (fallback == _bitstreamFallback)
         {
             // Called again after the AO settles; re-opening the banner would flicker.
@@ -2621,15 +2749,30 @@ public sealed partial class MainWindow : Window
         if (!fallback)
         {
             HintBanner.IsOpen = false;
+            if (wasFallback)
+            {
+                // Bitstream recovered: exclusive SPDIF on again.
+                await ApplyPlaybackPolicyAsync(save: false).ConfigureAwait(true);
+            }
+
             return;
         }
 
+        Log.Information("Audio: bitstream fallback to PCM format={Format}", format);
+        // Exclusive WASAPI after a failed TrueHD/DTS bitstream often only opens
+        // stereo PCM. Drop exclusive (keep the user's PCM layout) so 7.1 / 5.1
+        // can come out of shared mode. The passthrough setting stays on.
+        await ApplyPlaybackPolicyAsync(save: false, passthrough: false).ConfigureAwait(true);
+        await SettleAudioAsync().ConfigureAwait(true);
+        string? layout = await ReadPcmLayoutAsync().ConfigureAwait(true);
+        string detail = string.IsNullOrWhiteSpace(layout) ? "\u2014" : layout;
         HintBanner.Message = string.Format(
             System.Globalization.CultureInfo.InvariantCulture,
             _ui.BitstreamFallback,
-            format);
+            detail);
         SetName(HintBanner, HintBanner.Message);
         HintBanner.IsOpen = true;
+        Log.Information("Audio: bitstream fallback layout={Layout} format={Format}", layout, format);
     }
 
     private async Task ToggleFullscreenAsync()
@@ -2953,8 +3096,11 @@ public sealed partial class MainWindow : Window
             ?? await _engine.GetPropertyStringAsync("video-format").ConfigureAwait(true)
             ?? "-";
         string acodec = await _engine.GetPropertyStringAsync("audio-codec-name").ConfigureAwait(true) ?? "-";
-        string channels = await _engine.GetPropertyStringAsync("audio-params/channels").ConfigureAwait(true) ?? "-";
+        string? channels = await _engine.GetPropertyStringAsync("audio-params/hr-channels").ConfigureAwait(true)
+            ?? await _engine.GetPropertyStringAsync("audio-params/channels").ConfigureAwait(true);
         string channelCountRaw = await _engine.GetPropertyStringAsync("audio-params/channel-count").ConfigureAwait(true) ?? "";
+        string? outChannels = await _engine.GetPropertyStringAsync("audio-out-params/hr-channels").ConfigureAwait(true);
+        string outChannelCountRaw = await _engine.GetPropertyStringAsync("audio-out-params/channel-count").ConfigureAwait(true) ?? "";
         string sampleRateRaw = await _engine.GetPropertyStringAsync("audio-params/samplerate").ConfigureAwait(true) ?? "";
         string videoBitrateRaw = await _engine.GetPropertyStringAsync("video-bitrate").ConfigureAwait(true) ?? "";
         string audioBitrateRaw = await _engine.GetPropertyStringAsync("audio-bitrate").ConfigureAwait(true) ?? "";
@@ -3077,15 +3223,21 @@ public sealed partial class MainWindow : Window
 
         // --- Section 4: Audio ---
         string acodecLabel = FormatBadges.CodecProfileLabel(acodec, acodecProfile);
-        string channelCountLabel = int.TryParse(channelCountRaw, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out int chCount) && chCount > 0
-            ? chCount.ToString(System.Globalization.CultureInfo.InvariantCulture)
-            : _ui.InfoValueDash;
+        string? layout = ChannelLayouts.Describe(channels, ParseInt(channelCountRaw), outChannels, ParseInt(outChannelCountRaw));
+        if (layout is not null && _bitstreamFallback)
+        {
+            layout = string.Format(System.Globalization.CultureInfo.InvariantCulture, _ui.ChannelPcm, layout);
+        }
+        string channelCountLabel = layout
+            ?? (int.TryParse(channelCountRaw, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out int chCount) && chCount > 0
+                ? chCount.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                : _ui.InfoValueDash);
         string sampleRateLabel = double.TryParse(sampleRateRaw, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double srHz) && srHz > 0
             ? (srHz / 1000d).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) + " kHz"
             : _ui.InfoValueDash;
         long? audioBitrate = long.TryParse(audioBitrateRaw, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out long abps) ? abps : null;
         string audioBitrateLabel = InfoFormatters.FormatBitrate(audioBitrate, _ui.InfoValueDash);
-        string audioLine1 = $"  {_ui.InfoLabelCodec}: {acodecLabel}  {_ui.InfoLabelChannels}: {channelCountLabel} ({channels})";
+        string audioLine1 = $"  {_ui.InfoLabelCodec}: {acodecLabel}  {_ui.InfoLabelChannels}: {channelCountLabel}";
         string audioLine2 = $"  {_ui.InfoLabelSampleRate}: {sampleRateLabel}  {_ui.InfoLabelBitrate}: {audioBitrateLabel}";
         string audioLine3 = $"  {AudioPolicyLabel(_audioPolicy)}  {device}{flags}";
         string audioSection = $"{_ui.InfoAudio}\n{audioLine1}\n{audioLine2}\n{audioLine3}";
@@ -5222,6 +5374,7 @@ public sealed partial class MainWindow : Window
             _libraryQueue = queue ?? _libraryQueue;
             HideError();
             await ResetAudioDelayAsync().ConfigureAwait(true);
+            await RestorePassthroughForNewFileAsync().ConfigureAwait(true);
             // No warm-up here: measured on a cloud-backed Emby, a parallel range
             // request only queues behind mpv's own and makes the open slower. The
             // next episode is warmed ahead of time instead (PrefetchNextEpisodeAsync).
@@ -5231,7 +5384,7 @@ public sealed partial class MainWindow : Window
                 item.Name,
                 item.Id,
                 candidate.Method,
-                request.Uri.IsFile ? "file" : request.Uri.Host,
+                request.Uri.IsFile ? "file" : request.Uri.Authority,
                 candidate.MediaSourceId,
                 prepared,
                 resolvedAt - prepared,
@@ -5291,7 +5444,6 @@ public sealed partial class MainWindow : Window
 
             _ = ShowFormatBadgesAsync();
             await RefreshChaptersAsync().ConfigureAwait(true);
-            await MaybeApplyWindowsHdrAsync().ConfigureAwait(true);
             await MatchDisplayRefreshAsync().ConfigureAwait(true);
             await RefreshStatusAsync().ConfigureAwait(true);
             ShowChrome();
