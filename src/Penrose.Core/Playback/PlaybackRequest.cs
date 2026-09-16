@@ -66,7 +66,7 @@ public sealed record PlaybackRequest
             options["user-agent"] = UserAgent;
         }
 
-        if (StartPosition is { } start && !IsHttp(Uri))
+        if (StartPosition is { } start)
         {
             options["start"] = start.TotalSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
         }
@@ -108,25 +108,10 @@ public sealed record PlaybackRequest
         ["stream-lavf-o"] = "reconnect=1,reconnect_on_network_error=1,reconnect_delay_max=5",
         ["demuxer-lavf-probesize"] = "10000000",
         ["demuxer-lavf-analyzeduration"] = "6",
-        // Cloud 302 URLs usually support Range; without this mpv may treat the
-        // open as unseekable and ignore the FILE_LOADED resume seek.
-        ["force-seekable"] = "yes",
     };
 
     public static bool IsHttp(Uri uri) =>
         uri is { IsAbsoluteUri: true } && (uri.Scheme == System.Uri.UriSchemeHttp || uri.Scheme == System.Uri.UriSchemeHttps);
-
-    /// <summary>
-    /// HTTP resume opens from byte 0 and seeks once FILE_LOADED arrives instead
-    /// of passing loadfile <c>start=</c>. It was added for resumes that froze
-    /// until the user dragged the slider; that freeze was later traced to mpv
-    /// stalling after a refused spdif output fell back to PCM (handled in
-    /// <c>MpvPlaybackEngine.LeaveRefusedBitstream</c>), not to <c>start=</c>.
-    /// Kept because it is verified on HTTP sources; local files still use
-    /// <c>start=</c>.
-    /// </summary>
-    public bool SeekAfterOpen =>
-        StartPosition is { Ticks: > 0 } && IsHttp(Uri);
 
     private static string EscapeListItem(string item) =>
         item.Replace(",", "\\,", StringComparison.Ordinal);

@@ -13,7 +13,7 @@ Simplified Chinese first, then in English.
 
 - 局域网 Emby/Jellyfin 的 strm（Path 指向 OpenList 等外链）改为直连该 URL 并跟随 302，不再走服务器 DirectStream 中继；HTTP 探测从 2 MiB / 2 秒提高到 10 MiB / 6 秒。此前 4K 杜比视界 / DDP Atmos 片源经常首次无声、HDR 元数据来不及读到，退出后再播也无法再次点亮 Windows HDR。
 - 杜比视界（含 Profile 5）也视为 HDR 片源；等到 `video-params` / 音轨就绪后再开关 Windows HDR，若系统 HDR 已经打开则仍刷新 scRGB 管线。迟到出现的音轨会自动选中。
-- HTTP 续播不再用 loadfile 的 `start=`，改为先打开文件，再绝对 seek 到续播位置。打开音频直通后，如果输出设备本身不接收位流（例如笔记本扬声器），mpv 回退 PCM 后解码不再继续，声音和画面停在原处（从头播放同样如此，续播时表现为要拖一下进度条才继续）；现在会立即改用共享模式 PCM 继续播放，多声道也不会被独占模式压成立体声；横幅为「已回退为 PCM（7.1）」，控件栏在未下混时显示「7.1 PCM」，仅当下混时才出现箭头（「7.1 → 2.0 PCM」）。设置里的直通开关不变。切换 Windows HDR 后重新下发音频选项。
+- 打开音频直通后，如果输出设备本身不接收位流（例如笔记本扬声器），mpv 回退 PCM 后解码不再继续，声音和画面停在原处（从头播放同样如此，续播时表现为要拖一下进度条才继续）；现在会立即改用共享模式 PCM 继续播放，多声道也不会被独占模式压成立体声；横幅为「已回退为 PCM（7.1）」，控件栏在未下混时显示「7.1 PCM」，仅当下混时才出现箭头（「7.1 → 2.0 PCM」）。设置里的直通开关不变。切换 Windows HDR 后重新下发音频选项。
 
 ### Fixed
 
@@ -26,16 +26,15 @@ Simplified Chinese first, then in English.
   applied after `video-params` / tracks are known, and the scRGB pipeline is
   still refreshed when Windows HDR is already on. A late audio track is
   selected automatically.
-- HTTP resume no longer uses loadfile `start=`: the file opens, then an absolute
-  seek goes to the resume position. With audio passthrough on, an output device
-  that does not accept bitstream (such as laptop speakers) made mpv fall back to
-  PCM and then stop decoding: sound and picture stayed put, from the start as
-  well as on resume (where dragging the slider got it going). Playback now
-  switches to shared-mode PCM right away, so it keeps playing and multichannel
-  audio is not squeezed to stereo by exclusive mode. The fallback banner names
-  the PCM layout (`7.1`); the channel chip shows `7.1 PCM`, and an arrow only
-  when downmixing (`7.1 → 2.0 PCM`). The passthrough setting is left unchanged.
-  After toggling Windows HDR the audio policy is applied again.
+- With audio passthrough on, an output device that does not accept bitstream
+  (such as laptop speakers) made mpv fall back to PCM and then stop decoding:
+  sound and picture stayed put, from the start as well as on resume (where
+  dragging the slider got it going). Playback now switches to shared-mode PCM
+  right away, so it keeps playing and multichannel audio is not squeezed to
+  stereo by exclusive mode. The fallback banner names the PCM layout (`7.1`);
+  the channel chip shows `7.1 PCM`, and an arrow only when downmixing
+  (`7.1 → 2.0 PCM`). The passthrough setting is left unchanged. After toggling
+  Windows HDR the audio policy is applied again.
 
 ## [0.2.0] - 2026-09-15
 
