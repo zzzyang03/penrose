@@ -2384,7 +2384,7 @@ public sealed partial class MainWindow : Window
         Label(ChannelsButton, label is null ? _ui.Channels : _ui.Channels + "  " + label);
     }
 
-    private async Task<string?> ReadPcmChannelLabelAsync()
+    private async Task<string?> ReadPcmLayoutAsync()
     {
         if (_engine is null)
         {
@@ -2395,11 +2395,20 @@ public sealed partial class MainWindow : Window
         string? sourceCount = await _engine.GetPropertyStringAsync("audio-params/channel-count").ConfigureAwait(true);
         string? output = await _engine.GetPropertyStringAsync("audio-out-params/hr-channels").ConfigureAwait(true);
         string? outputCount = await _engine.GetPropertyStringAsync("audio-out-params/channel-count").ConfigureAwait(true);
-        // After bitstream fallback, always show source → output so "7.1 → 7.1"
-        // is distinct from a hidden downmix to 2.0.
-        return _bitstreamFallback
-            ? ChannelLayouts.DescribePair(source, ParseInt(sourceCount), output, ParseInt(outputCount))
-            : ChannelLayouts.Describe(source, ParseInt(sourceCount), output, ParseInt(outputCount));
+        return ChannelLayouts.Describe(source, ParseInt(sourceCount), output, ParseInt(outputCount));
+    }
+
+    private async Task<string?> ReadPcmChannelLabelAsync()
+    {
+        string? layout = await ReadPcmLayoutAsync().ConfigureAwait(true);
+        if (layout is null || !_bitstreamFallback)
+        {
+            return layout;
+        }
+
+        // Bitstream chip is "位流"; PCM fallback must not look like passthrough
+        // succeeded. Arrow only appears when downmixing (7.1 → 2.0).
+        return string.Format(System.Globalization.CultureInfo.InvariantCulture, _ui.ChannelPcm, layout);
     }
 
     private DynamicRange _currentRange = DynamicRange.Sdr;
@@ -2747,7 +2756,7 @@ public sealed partial class MainWindow : Window
         // can come out of shared mode. The passthrough setting stays on.
         await ApplyPlaybackPolicyAsync(save: false, passthrough: false).ConfigureAwait(true);
         await SettleAudioAsync().ConfigureAwait(true);
-        string? layout = await ReadPcmChannelLabelAsync().ConfigureAwait(true);
+        string? layout = await ReadPcmLayoutAsync().ConfigureAwait(true);
         string detail = string.IsNullOrWhiteSpace(layout) ? "\u2014" : layout;
         HintBanner.Message = string.Format(
             System.Globalization.CultureInfo.InvariantCulture,
@@ -3206,9 +3215,11 @@ public sealed partial class MainWindow : Window
 
         // --- Section 4: Audio ---
         string acodecLabel = FormatBadges.CodecProfileLabel(acodec, acodecProfile);
-        string? layout = _bitstreamFallback
-            ? ChannelLayouts.DescribePair(channels, ParseInt(channelCountRaw), outChannels, ParseInt(outChannelCountRaw))
-            : ChannelLayouts.Describe(channels, ParseInt(channelCountRaw), outChannels, ParseInt(outChannelCountRaw));
+        string? layout = ChannelLayouts.Describe(channels, ParseInt(channelCountRaw), outChannels, ParseInt(outChannelCountRaw));
+        if (layout is not null && _bitstreamFallback)
+        {
+            layout = string.Format(System.Globalization.CultureInfo.InvariantCulture, _ui.ChannelPcm, layout);
+        }
         string channelCountLabel = layout
             ?? (int.TryParse(channelCountRaw, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out int chCount) && chCount > 0
                 ? chCount.ToString(System.Globalization.CultureInfo.InvariantCulture)

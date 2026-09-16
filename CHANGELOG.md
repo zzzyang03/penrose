@@ -13,7 +13,7 @@ Simplified Chinese first, then in English.
 
 - 局域网 Emby/Jellyfin 的 strm（Path 指向 OpenList 等外链）改为直连该 URL 并跟随 302，不再走服务器 DirectStream 中继；HTTP 探测从 2 MiB / 2 秒提高到 10 MiB / 6 秒。此前 4K 杜比视界 / DDP Atmos 片源经常首次无声、HDR 元数据来不及读到，退出后再播也无法再次点亮 Windows HDR。
 - 杜比视界（含 Profile 5）也视为 HDR 片源；等到 `video-params` / 音轨就绪后再开关 Windows HDR，若系统 HDR 已经打开则仍刷新 scRGB 管线。迟到出现的音轨会自动选中。
-- HTTP 续播不再用 loadfile 的 `start=`（打开时尚未读到 Matroska Cues，HEVC / TrueHD 会停在 GOP 中间，进度条卡住直到再 seek）。改为先在片头尝试拉起 WASAPI/位流再绝对 seek；片头位流起不来时先关掉独占再 seek，避免在进度点上拆独占把 TrueHD 拆坏。回退 PCM 后控件栏和提示显示「源 → 输出」（例如 `7.1 → 7.1` 或 `7.1 → 2.0`），不再把采样格式 `s32` 当成声道。设置里的直通开关不变。切换 Windows HDR 后重新下发音频选项。
+- HTTP 续播不再用 loadfile 的 `start=`（打开时尚未读到 Matroska Cues，HEVC / TrueHD 会停在 GOP 中间，进度条卡住直到再 seek）。改为先在片头尝试拉起 WASAPI/位流再绝对 seek；片头位流起不来时先关掉独占再 seek，避免在进度点上拆独占把 TrueHD 拆坏。位流失败时横幅为「已回退为 PCM（7.1）」；控件栏在未下混时显示「7.1 PCM」，仅当下混时才出现箭头（「7.1 → 2.0 PCM」）。设置里的直通开关不变。切换 Windows HDR 后重新下发音频选项。
 
 ### Fixed
 
@@ -30,8 +30,8 @@ Simplified Chinese first, then in English.
   are read, so HEVC / TrueHD freeze mid-GOP until the user drags the slider).
   WASAPI / bitstream is tried at t=0; if it does not come up, exclusive mode is
   dropped before the resume seek so TrueHD is not torn down mid-stream. The
-  fallback banner and the channel chip show source → output (for example
-  `7.1 → 7.1` or `7.1 → 2.0`) instead of the PCM sample format `s32`. After
+  fallback banner names the PCM layout (`7.1`); the channel chip shows
+  `7.1 PCM`, and an arrow only when downmixing (`7.1 → 2.0 PCM`). After
   toggling Windows HDR the audio policy is applied again.
 
 ## [0.2.0] - 2026-09-15
