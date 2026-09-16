@@ -104,6 +104,10 @@ public sealed class FormatBadgesTests
         Assert.Equal("7.1 \u2192 5.1", ChannelLayouts.Describe("7.1", 8, "5.1(side)", 6));
         Assert.Equal("5.1", ChannelLayouts.Describe("5.1(side)", 6, "5.1", 6));
         Assert.Equal("2.0", ChannelLayouts.Describe(null, null, "stereo", 2));
+        Assert.Equal("7.1 \u2192 7.1", ChannelLayouts.DescribePair("7.1", 8, "7.1", 8));
+        Assert.Equal("7.1 \u2192 2.0", ChannelLayouts.DescribePair("7.1", 8, "stereo", 2));
+        Assert.Equal("7.1 \u2192 \u2014", ChannelLayouts.DescribePair("7.1", 8, null, null));
+        Assert.Equal("2.0", ChannelLayouts.DescribePair(null, null, "stereo", 2));
         Assert.True(ChannelLayouts.IsValidOverride(""));
         Assert.True(ChannelLayouts.IsValidOverride("auto"));
         Assert.True(ChannelLayouts.IsValidOverride("5.1"));

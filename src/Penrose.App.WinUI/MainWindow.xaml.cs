@@ -2374,11 +2374,7 @@ public sealed partial class MainWindow : Window
         }
         else
         {
-            string? source = await _engine.GetPropertyStringAsync("audio-params/hr-channels").ConfigureAwait(true);
-            string? sourceCount = await _engine.GetPropertyStringAsync("audio-params/channel-count").ConfigureAwait(true);
-            string? output = await _engine.GetPropertyStringAsync("audio-out-params/hr-channels").ConfigureAwait(true);
-            string? outputCount = await _engine.GetPropertyStringAsync("audio-out-params/channel-count").ConfigureAwait(true);
-            label = ChannelLayouts.Describe(source, ParseInt(sourceCount), output, ParseInt(outputCount));
+            label = await ReadPcmChannelLabelAsync().ConfigureAwait(true);
         }
 
         // Permanent while a file is loaded: "—" until the audio chain reports, or for
@@ -2386,6 +2382,24 @@ public sealed partial class MainWindow : Window
         ChannelsText.Text = label ?? "\u2014";
         ChannelsButton.Visibility = Visibility.Visible;
         Label(ChannelsButton, label is null ? _ui.Channels : _ui.Channels + "  " + label);
+    }
+
+    private async Task<string?> ReadPcmChannelLabelAsync()
+    {
+        if (_engine is null)
+        {
+            return null;
+        }
+
+        string? source = await _engine.GetPropertyStringAsync("audio-params/hr-channels").ConfigureAwait(true);
+        string? sourceCount = await _engine.GetPropertyStringAsync("audio-params/channel-count").ConfigureAwait(true);
+        string? output = await _engine.GetPropertyStringAsync("audio-out-params/hr-channels").ConfigureAwait(true);
+        string? outputCount = await _engine.GetPropertyStringAsync("audio-out-params/channel-count").ConfigureAwait(true);
+        // After bitstream fallback, always show source → output so "7.1 → 7.1"
+        // is distinct from a hidden downmix to 2.0.
+        return _bitstreamFallback
+            ? ChannelLayouts.DescribePair(source, ParseInt(sourceCount), output, ParseInt(outputCount))
+            : ChannelLayouts.Describe(source, ParseInt(sourceCount), output, ParseInt(outputCount));
     }
 
     private DynamicRange _currentRange = DynamicRange.Sdr;
@@ -2678,13 +2692,8 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private async Task RestorePassthroughForNewFileAsync()
     {
-        HintBanner.IsOpen = false;
-        if (!_bitstreamFallback)
-        {
-            return;
-        }
-
         _bitstreamFallback = false;
+        HintBanner.IsOpen = false;
         await ApplyPlaybackPolicyAsync(save: false).ConfigureAwait(true);
     }
 
@@ -2732,18 +2741,21 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        HintBanner.Message = string.Format(
-            System.Globalization.CultureInfo.InvariantCulture,
-            _ui.BitstreamFallback,
-            format);
-        SetName(HintBanner, HintBanner.Message);
-        HintBanner.IsOpen = true;
         Log.Information("Audio: bitstream fallback to PCM format={Format}", format);
         // Exclusive WASAPI after a failed TrueHD/DTS bitstream often only opens
         // stereo PCM. Drop exclusive (keep the user's PCM layout) so 7.1 / 5.1
         // can come out of shared mode. The passthrough setting stays on.
         await ApplyPlaybackPolicyAsync(save: false, passthrough: false).ConfigureAwait(true);
         await SettleAudioAsync().ConfigureAwait(true);
+        string? layout = await ReadPcmChannelLabelAsync().ConfigureAwait(true);
+        string detail = string.IsNullOrWhiteSpace(layout) ? "\u2014" : layout;
+        HintBanner.Message = string.Format(
+            System.Globalization.CultureInfo.InvariantCulture,
+            _ui.BitstreamFallback,
+            detail);
+        SetName(HintBanner, HintBanner.Message);
+        HintBanner.IsOpen = true;
+        Log.Information("Audio: bitstream fallback layout={Layout} format={Format}", layout, format);
     }
 
     private async Task ToggleFullscreenAsync()
@@ -3067,8 +3079,11 @@ public sealed partial class MainWindow : Window
             ?? await _engine.GetPropertyStringAsync("video-format").ConfigureAwait(true)
             ?? "-";
         string acodec = await _engine.GetPropertyStringAsync("audio-codec-name").ConfigureAwait(true) ?? "-";
-        string channels = await _engine.GetPropertyStringAsync("audio-params/channels").ConfigureAwait(true) ?? "-";
+        string? channels = await _engine.GetPropertyStringAsync("audio-params/hr-channels").ConfigureAwait(true)
+            ?? await _engine.GetPropertyStringAsync("audio-params/channels").ConfigureAwait(true);
         string channelCountRaw = await _engine.GetPropertyStringAsync("audio-params/channel-count").ConfigureAwait(true) ?? "";
+        string? outChannels = await _engine.GetPropertyStringAsync("audio-out-params/hr-channels").ConfigureAwait(true);
+        string outChannelCountRaw = await _engine.GetPropertyStringAsync("audio-out-params/channel-count").ConfigureAwait(true) ?? "";
         string sampleRateRaw = await _engine.GetPropertyStringAsync("audio-params/samplerate").ConfigureAwait(true) ?? "";
         string videoBitrateRaw = await _engine.GetPropertyStringAsync("video-bitrate").ConfigureAwait(true) ?? "";
         string audioBitrateRaw = await _engine.GetPropertyStringAsync("audio-bitrate").ConfigureAwait(true) ?? "";
@@ -3191,15 +3206,19 @@ public sealed partial class MainWindow : Window
 
         // --- Section 4: Audio ---
         string acodecLabel = FormatBadges.CodecProfileLabel(acodec, acodecProfile);
-        string channelCountLabel = int.TryParse(channelCountRaw, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out int chCount) && chCount > 0
-            ? chCount.ToString(System.Globalization.CultureInfo.InvariantCulture)
-            : _ui.InfoValueDash;
+        string? layout = _bitstreamFallback
+            ? ChannelLayouts.DescribePair(channels, ParseInt(channelCountRaw), outChannels, ParseInt(outChannelCountRaw))
+            : ChannelLayouts.Describe(channels, ParseInt(channelCountRaw), outChannels, ParseInt(outChannelCountRaw));
+        string channelCountLabel = layout
+            ?? (int.TryParse(channelCountRaw, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out int chCount) && chCount > 0
+                ? chCount.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                : _ui.InfoValueDash);
         string sampleRateLabel = double.TryParse(sampleRateRaw, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double srHz) && srHz > 0
             ? (srHz / 1000d).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) + " kHz"
             : _ui.InfoValueDash;
         long? audioBitrate = long.TryParse(audioBitrateRaw, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out long abps) ? abps : null;
         string audioBitrateLabel = InfoFormatters.FormatBitrate(audioBitrate, _ui.InfoValueDash);
-        string audioLine1 = $"  {_ui.InfoLabelCodec}: {acodecLabel}  {_ui.InfoLabelChannels}: {channelCountLabel} ({channels})";
+        string audioLine1 = $"  {_ui.InfoLabelCodec}: {acodecLabel}  {_ui.InfoLabelChannels}: {channelCountLabel}";
         string audioLine2 = $"  {_ui.InfoLabelSampleRate}: {sampleRateLabel}  {_ui.InfoLabelBitrate}: {audioBitrateLabel}";
         string audioLine3 = $"  {AudioPolicyLabel(_audioPolicy)}  {device}{flags}";
         string audioSection = $"{_ui.InfoAudio}\n{audioLine1}\n{audioLine2}\n{audioLine3}";

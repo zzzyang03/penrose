@@ -282,6 +282,27 @@ public static class ChannelLayouts
         return source + " \u2192 " + output;
     }
 
+    /// <summary>
+    /// Always <c>source → output</c>, including <c>7.1 → 7.1</c>. Used after a
+    /// bitstream fallback so a same-layout PCM path is not shown as a lone "7.1".
+    /// </summary>
+    public static string? DescribePair(string? sourceLayout, int? sourceChannels, string? outputLayout, int? outputChannels)
+    {
+        string? source = Label(sourceLayout, sourceChannels);
+        string? output = Label(outputLayout, outputChannels);
+        if (source is null)
+        {
+            return output;
+        }
+
+        if (output is null)
+        {
+            return source + " \u2192 \u2014";
+        }
+
+        return source + " \u2192 " + output;
+    }
+
     public static bool IsValidOverride(string? value) =>
         string.IsNullOrEmpty(value)
         || value.Equals(Source, StringComparison.OrdinalIgnoreCase)

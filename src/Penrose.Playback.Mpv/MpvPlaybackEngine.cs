@@ -639,7 +639,11 @@ public sealed class MpvPlaybackEngine : IPlaybackEngine
                 return Task.CompletedTask;
             }, CancellationToken.None).ConfigureAwait(false);
 
-            await WaitForAudioOutAsync(generation, TimeSpan.FromMilliseconds(1500)).ConfigureAwait(false);
+            // Exclusive TrueHD often fails instantly on HTTP (no AU yet). Do not
+            // seek while exclusive is still armed: that re-inits WASAPI mid-stream
+            // and TrueHD skips frames. Drop to shared PCM first, then seek.
+            await WaitForAudioOutAsync(generation, TimeSpan.FromMilliseconds(800)).ConfigureAwait(false);
+            await DropExclusiveIfBitstreamFailedAsync(generation).ConfigureAwait(false);
             if (generation != _generation)
             {
                 return;
@@ -649,6 +653,7 @@ public sealed class MpvPlaybackEngine : IPlaybackEngine
             await SeekAsync(start, CancellationToken.None).ConfigureAwait(false);
             _logger.LogInformation("Play: resume seek after open start={Start}", start);
             await WaitForAudioOutAsync(generation, TimeSpan.FromMilliseconds(800)).ConfigureAwait(false);
+            await DropExclusiveIfBitstreamFailedAsync(generation).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -704,6 +709,52 @@ public sealed class MpvPlaybackEngine : IPlaybackEngine
 
             await Task.Delay(50).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>
+    /// If HTTP resume did not get an SPDIF AO, exclusive WASAPI must come down
+    /// before the resume seek. Exclusive PCM typically opens stereo only.
+    /// </summary>
+    private async Task DropExclusiveIfBitstreamFailedAsync(long generation)
+    {
+        if (generation != _generation)
+        {
+            return;
+        }
+
+        string? format = await GetPropertyStringAsync("audio-out-params/format", CancellationToken.None)
+            .ConfigureAwait(false);
+        if (AudioPassthrough.IsSpdifFormat(format))
+        {
+            return;
+        }
+
+        string? exclusive = await GetPropertyStringAsync("audio-exclusive", CancellationToken.None)
+            .ConfigureAwait(false);
+        if (exclusive is not "yes")
+        {
+            return;
+        }
+
+        await Enqueue(_ =>
+        {
+            if (generation != _generation)
+            {
+                return Task.CompletedTask;
+            }
+
+            _client.SetProperty("audio-exclusive", "no");
+            _client.SetProperty("audio-spdif", "");
+            return Task.CompletedTask;
+        }, CancellationToken.None).ConfigureAwait(false);
+        _logger.LogInformation("Play: HTTP resume dropped exclusive format={Format}", format);
+        if (!string.IsNullOrWhiteSpace(format))
+        {
+            // Stale exclusive-PCM params would make WaitForAudioOut return immediately.
+            await Task.Delay(400).ConfigureAwait(false);
+        }
+
+        await WaitForAudioOutAsync(generation, TimeSpan.FromMilliseconds(800)).ConfigureAwait(false);
     }
 
     private void ApplyTracksFromClient(long generation)
