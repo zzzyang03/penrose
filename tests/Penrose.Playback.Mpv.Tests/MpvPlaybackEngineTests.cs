@@ -82,6 +82,30 @@ public sealed class MpvPlaybackEngineTests
     }
 
     [Fact]
+    public async Task Http_resume_seeks_after_file_loaded_instead_of_start_option()
+    {
+        await using EngineHarness harness = await EngineHarness.StartAsync();
+        PlaybackRequest request = Request("https://example.invalid/a.mkv") with
+        {
+            StartPosition = TimeSpan.FromSeconds(189.6),
+        };
+        Task<PlaybackSnapshot> load = harness.Engine.LoadAsync(request);
+        await harness.Client.LoadfileIssued.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.Equal("yes", harness.Client.Properties["pause"]);
+        IReadOnlyList<string> loadfile = Assert.Single(harness.Client.Commands, c => c[0] == "loadfile");
+        Assert.DoesNotContain("start=", loadfile[^1], StringComparison.Ordinal);
+
+        harness.Client.Push(new MpvClientEvent(MpvEventId.StartFile, 1, 0));
+        harness.Client.Push(new MpvClientEvent(MpvEventId.FileLoaded, 1, 0));
+        await load.WaitAsync(TimeSpan.FromSeconds(2));
+
+        IReadOnlyList<string> seek = Assert.Single(harness.Client.Commands, c => c.Count > 0 && c[0] == "seek");
+        Assert.Equal("189.6", seek[1]);
+        Assert.Equal("absolute", seek[2]);
+        Assert.Equal("no", harness.Client.Properties["pause"]);
+    }
+
+    [Fact]
     public async Task Eof_reached_with_keep_open_maps_to_ended_and_seeking_back_restores_loaded()
     {
         await using EngineHarness harness = await EngineHarness.StartAsync();

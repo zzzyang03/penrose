@@ -13,6 +13,7 @@ Simplified Chinese first, then in English.
 
 - 局域网 Emby/Jellyfin 的 strm（Path 指向 OpenList 等外链）改为直连该 URL 并跟随 302，不再走服务器 DirectStream 中继；HTTP 探测从 2 MiB / 2 秒提高到 10 MiB / 6 秒。此前 4K 杜比视界 / DDP Atmos 片源经常首次无声、HDR 元数据来不及读到，退出后再播也无法再次点亮 Windows HDR。
 - 杜比视界（含 Profile 5）也视为 HDR 片源；等到 `video-params` / 音轨就绪后再开关 Windows HDR，若系统 HDR 已经打开则仍刷新 scRGB 管线。迟到出现的音轨会自动选中。
+- HTTP 续播不再用 loadfile 的 `start=`（打开时尚未读到 Matroska Cues，HEVC / TrueHD 会停在 GOP 中间，进度条卡住直到再 seek）。改为先打开再绝对 seek；切换 Windows HDR 后重新下发音频选项，避免 WASAPI 独占初始化失败后画面停住。
 
 ### Fixed
 
@@ -25,6 +26,11 @@ Simplified Chinese first, then in English.
   applied after `video-params` / tracks are known, and the scRGB pipeline is
   still refreshed when Windows HDR is already on. A late audio track is
   selected automatically.
+- HTTP resume no longer uses loadfile `start=` (that seeks before Matroska Cues
+  are read, so HEVC / TrueHD freeze mid-GOP until the user drags the slider).
+  The file opens, then an absolute seek runs. After toggling Windows HDR the
+  audio policy is applied again so a failed WASAPI exclusive init does not
+  leave the picture stuck.
 
 ## [0.2.0] - 2026-09-15
 

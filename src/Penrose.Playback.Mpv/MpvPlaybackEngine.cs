@@ -116,9 +116,10 @@ public sealed class MpvPlaybackEngine : IPlaybackEngine
 
             try
             {
-                // A new load always starts playing. keep-open leaves the core paused
-                // at the previous EOF and loadfile does not reset that.
-                _client.SetProperty("pause", "no");
+                // keep-open leaves the core paused at the previous EOF; loadfile
+                // does not reset that. HTTP resume stays paused until FILE_LOADED
+                // so the first frames are not from t=0 (start= is not on the load).
+                _client.SetProperty("pause", request.SeekAfterOpen ? "yes" : "no");
                 IReadOnlyList<string> args = LoadfileOptions.BuildCommand(request);
                 _client.CommandAsync(args, _client.NextReplyUserdata());
             }
@@ -444,6 +445,7 @@ public sealed class MpvPlaybackEngine : IPlaybackEngine
             AttachExternalSubtitles();
             ApplyDiscTitle();
             ApplyTracksFromClient(stamp);
+            SeekHttpResume();
             snapshot = Snapshot;
             lock (_gate)
             {
@@ -585,6 +587,30 @@ public sealed class MpvPlaybackEngine : IPlaybackEngine
         _client.SetProperty(
             "disc-title",
             title.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    }
+
+    private void SeekHttpResume()
+    {
+        PlaybackRequest? request;
+        lock (_gate)
+        {
+            request = _pendingRequest;
+        }
+
+        if (request is null || !request.SeekAfterOpen || request.StartPosition is not { } start)
+        {
+            return;
+        }
+
+        _client.CommandAsync(
+            [
+                "seek",
+                start.TotalSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                "absolute",
+            ],
+            _client.NextReplyUserdata());
+        _client.SetProperty("pause", "no");
+        _logger.LogInformation("Play: resume seek after open start={Start}", start);
     }
 
     private void ApplyTracksFromClient(long generation)

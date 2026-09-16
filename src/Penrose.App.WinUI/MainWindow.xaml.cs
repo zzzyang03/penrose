@@ -2217,6 +2217,19 @@ public sealed partial class MainWindow : Window
             await _surface.RefreshOutputPipelineAsync().ConfigureAwait(true);
         }
 
+        // Switching Windows HDR / rebuilding the swap chain tears down WASAPI
+        // exclusive (TrueHD bitstream logs "Failed to initialize audio driver").
+        // Playback then sits on the resume timestamp until the user seeks.
+        await ApplyPlaybackPolicyAsync(save: false).ConfigureAwait(true);
+        await SettleAudioAsync().ConfigureAwait(true);
+        if (_engine is not null
+            && ticket == _badgeTicket
+            && _engine.Snapshot.PlaybackGeneration == generation
+            && _engine.Snapshot.Position is { } here)
+        {
+            await _engine.SeekAsync(here + TimeSpan.FromMilliseconds(250)).ConfigureAwait(true);
+        }
+
         if (enable)
         {
             ShowOsd(_ui.HdrOnOsd);
