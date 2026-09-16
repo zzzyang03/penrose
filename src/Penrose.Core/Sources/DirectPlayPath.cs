@@ -1,3 +1,5 @@
+using Penrose.Core.Playback;
+
 namespace Penrose.Core.Sources;
 
 /// <summary>
@@ -54,4 +56,63 @@ public static class DirectPlayPath
         !string.IsNullOrWhiteSpace(value)
         && (value.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
             || value.StartsWith("https://", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// strm items put the real media URL in <c>Path</c> (OpenList, a cloud
+    /// drive, another host). Playing that URL lets mpv follow the 302 itself.
+    /// The server <c>DirectStreamUrl</c> is a same-origin proxy: it often cannot
+    /// Range-seek a cloud strm, so a short lavf probe misses audio / Dolby Vision
+    /// metadata and a resume lands mid-GOP.
+    /// <c>Path</c> is ignored when it is loopback (only the server can open it) or
+    /// the same origin as the server (a Download route, not a strm target).
+    /// </summary>
+    public static bool TryChooseRemotePlay(
+        string? path,
+        string? directStreamUrl,
+        Uri serverBase,
+        out string url,
+        out MediaSourceKind kind)
+    {
+        ArgumentNullException.ThrowIfNull(serverBase);
+        url = "";
+        kind = MediaSourceKind.ServerDirectPlay;
+        if (IsExternalHttpPath(path, serverBase))
+        {
+            url = path!;
+            kind = MediaSourceKind.StrmRelay;
+            return true;
+        }
+
+        if (LooksLikeRemoteUrl(directStreamUrl))
+        {
+            url = directStreamUrl!;
+            kind = MediaSourceKind.ServerDirectPlay;
+            return true;
+        }
+
+        if (IsHttpUrl(path))
+        {
+            url = path!;
+            kind = MediaSourceKind.ServerDirectPlay;
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Absolute http(s) URL whose host is not the media server and not loopback.
+    /// OpenList on the same machine uses a different port, which is a different
+    /// origin and still counts.
+    /// </summary>
+    public static bool IsExternalHttpPath(string? path, Uri serverBase)
+    {
+        ArgumentNullException.ThrowIfNull(serverBase);
+        if (!IsHttpUrl(path) || !Uri.TryCreate(path, UriKind.Absolute, out Uri? uri))
+        {
+            return false;
+        }
+
+        return !uri.IsLoopback && !HttpQueryAuth.IsSameOrigin(uri, serverBase);
+    }
 }

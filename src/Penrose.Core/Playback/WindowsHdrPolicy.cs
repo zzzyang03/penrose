@@ -12,4 +12,12 @@ public static class WindowsHdrPolicy
         bool advancedColorSupported,
         bool advancedColorEnabled) =>
         settingOn && sourceHdr && advancedColorSupported && !advancedColorEnabled;
+
+    /// <summary>
+    /// The windowed scRGB pipeline must run whenever the source is HDR and
+    /// Advanced Color is already on, even if we did not toggle it this time
+    /// (restore failed, or Windows HDR was left on from the previous file).
+    /// </summary>
+    public static bool ShouldRefreshPipeline(bool sourceHdr, bool advancedColorEnabled) =>
+        sourceHdr && advancedColorEnabled;
 }

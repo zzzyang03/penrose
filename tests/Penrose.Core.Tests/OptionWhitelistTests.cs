@@ -177,8 +177,8 @@ public sealed class OptionWhitelistTests
         PlaybackRequest remote = new() { RequestId = Guid.NewGuid(), Uri = new Uri("https://emby.example/videos/1/original.mkv") };
         IReadOnlyDictionary<string, string> options = remote.ToFileLocalOptions();
         Assert.Contains("reconnect=1", options["stream-lavf-o"], StringComparison.Ordinal);
-        Assert.Equal("2000000", options["demuxer-lavf-probesize"]);
-        Assert.Equal("2", options["demuxer-lavf-analyzeduration"]);
+        Assert.Equal("10000000", options["demuxer-lavf-probesize"]);
+        Assert.Equal("6", options["demuxer-lavf-analyzeduration"]);
         // Never as a global property: the key stays on the file-local list.
         Assert.True(OptionWhitelist.IsNetworkCredentialKey("stream-lavf-o"));
 

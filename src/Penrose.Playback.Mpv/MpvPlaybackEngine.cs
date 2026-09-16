@@ -82,6 +82,9 @@ public sealed class MpvPlaybackEngine : IPlaybackEngine
         _client.ObserveProperty("eof-reached", MpvFormat.Flag);
         _client.ObserveProperty("time-pos", MpvFormat.Double);
         _client.ObserveProperty("duration", MpvFormat.Double);
+        // JSON string: audio / Dolby Vision tracks often appear after FILE_LOADED
+        // on a cloud strm whose header was not in the first probe window.
+        _client.ObserveProperty("track-list", MpvFormat.String);
         // mpv's own warnings (and, when asked, its verbose stream / demuxer trace)
         // land in the app log instead of vanishing.
         if (!string.IsNullOrWhiteSpace(_engineOptions.MpvLogLevel) && _engineOptions.MpvLogLevel != "no")

@@ -270,6 +270,61 @@ public sealed class EmbyPlaybackInfoParserTests
     }
 
     [Fact]
+    public void Strm_openlist_path_is_preferred_over_direct_stream()
+    {
+        PlaybackCandidate candidate = EmbyPlaybackInfoParser.Parse(
+            """
+            {
+              "PlaySessionId": "sess-strm",
+              "MediaSources": [
+                {
+                  "Id": "strm-src",
+                  "Protocol": "Http",
+                  "Path": "http://192.168.1.88:5244/d/movie.mkv?sign=placeholder",
+                  "SupportsDirectPlay": true,
+                  "SupportsDirectStream": true,
+                  "DirectStreamUrl": "/emby/videos/99/stream.mkv?Static=true",
+                  "RequiredHttpHeaders": { "X-Emby-Token": "secret-token" }
+                }
+              ]
+            }
+            """,
+            new Uri("http://192.168.1.88:8096/"),
+            "99");
+        Assert.Equal(PlayMethod.DirectPlay, candidate.Method);
+        Assert.Equal(MediaSourceKind.StrmRelay, candidate.SourceKind);
+        Assert.Equal("192.168.1.88", candidate.Uri.Host);
+        Assert.Equal(5244, candidate.Uri.Port);
+        Assert.Equal("/d/movie.mkv", candidate.Uri.AbsolutePath);
+        Assert.Equal("secret-token", candidate.Headers["X-Emby-Token"]);
+    }
+
+    [Fact]
+    public void Loopback_strm_path_falls_back_to_direct_stream()
+    {
+        PlaybackCandidate candidate = EmbyPlaybackInfoParser.Parse(
+            """
+            {
+              "PlaySessionId": "sess-loop",
+              "MediaSources": [
+                {
+                  "Id": "strm-src",
+                  "Protocol": "Http",
+                  "Path": "http://127.0.0.1:5244/d/movie.mkv",
+                  "SupportsDirectPlay": true,
+                  "SupportsDirectStream": true,
+                  "DirectStreamUrl": "/emby/videos/99/stream.mkv?Static=true"
+                }
+              ]
+            }
+            """,
+            Server,
+            "99");
+        Assert.Equal(MediaSourceKind.ServerDirectPlay, candidate.SourceKind);
+        Assert.Equal(new Uri("https://emby.example/emby/videos/99/stream.mkv?Static=true"), candidate.Uri);
+    }
+
+    [Fact]
     public async Task Refresh_without_item_id_throws()
     {
         using EmbyClient client = new(Server);

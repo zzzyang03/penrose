@@ -9,6 +9,23 @@ Simplified Chinese first, then in English.
 
 ## [Unreleased]
 
+### 修复
+
+- 局域网 Emby/Jellyfin 的 strm（Path 指向 OpenList 等外链）改为直连该 URL 并跟随 302，不再走服务器 DirectStream 中继；HTTP 探测从 2 MiB / 2 秒提高到 10 MiB / 6 秒。此前 4K 杜比视界 / DDP Atmos 片源经常首次无声、HDR 元数据来不及读到，退出后再播也无法再次点亮 Windows HDR。
+- 杜比视界（含 Profile 5）也视为 HDR 片源；等到 `video-params` / 音轨就绪后再开关 Windows HDR，若系统 HDR 已经打开则仍刷新 scRGB 管线。迟到出现的音轨会自动选中。
+
+### Fixed
+
+- LAN Emby/Jellyfin `.strm` items whose Path is an OpenList (or other off-origin)
+  URL now play that URL so mpv follows the 302 itself, instead of tunnelling
+  through the server DirectStream route. The HTTP lavf probe is 10 MiB / 6 s
+  (was 2 MiB / 2 s). 4K Dolby Vision / DDP Atmos files often started silent and
+  missed HDR metadata; a second play then could not turn Windows HDR back on.
+- Dolby Vision (including profile 5) counts as an HDR source. Windows HDR is
+  applied after `video-params` / tracks are known, and the scRGB pipeline is
+  still refreshed when Windows HDR is already on. A late audio track is
+  selected automatically.
+
 ## [0.2.0] - 2026-09-15
 
 ### 新增
