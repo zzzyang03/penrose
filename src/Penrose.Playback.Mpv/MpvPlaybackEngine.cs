@@ -445,7 +445,11 @@ public sealed class MpvPlaybackEngine : IPlaybackEngine
             AttachExternalSubtitles();
             ApplyDiscTitle();
             ApplyTracksFromClient(stamp);
-            SeekHttpResume();
+            if (BeginHttpResumeIfNeeded(stamp))
+            {
+                return;
+            }
+
             snapshot = Snapshot;
             lock (_gate)
             {
@@ -589,28 +593,117 @@ public sealed class MpvPlaybackEngine : IPlaybackEngine
             title.ToString(System.Globalization.CultureInfo.InvariantCulture));
     }
 
-    private void SeekHttpResume()
+    /// <summary>
+    /// HTTP resume must init WASAPI (and TrueHD SPDIF) on a valid access unit at
+    /// t=0. Seeking while still paused lands mid-frame and exclusive init fails,
+    /// which the host then reports as bitstream→PCM stereo.
+    /// </summary>
+    private bool BeginHttpResumeIfNeeded(long generation)
     {
         PlaybackRequest? request;
+        TaskCompletionSource<PlaybackSnapshot>? tcs;
         lock (_gate)
         {
             request = _pendingRequest;
+            tcs = _loadTcs;
         }
 
-        if (request is null || !request.SeekAfterOpen || request.StartPosition is not { } start)
+        if (request is null || !request.SeekAfterOpen || request.StartPosition is null || tcs is null)
         {
-            return;
+            return false;
         }
 
-        _client.CommandAsync(
-            [
-                "seek",
-                start.TotalSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                "absolute",
-            ],
-            _client.NextReplyUserdata());
-        _client.SetProperty("pause", "no");
-        _logger.LogInformation("Play: resume seek after open start={Start}", start);
+        _ = FinishHttpResumeAsync(request, generation, tcs);
+        return true;
+    }
+
+    private async Task FinishHttpResumeAsync(
+        PlaybackRequest request,
+        long generation,
+        TaskCompletionSource<PlaybackSnapshot> tcs)
+    {
+        string restoreMute = "no";
+        try
+        {
+            await Enqueue(_ =>
+            {
+                if (generation != _generation)
+                {
+                    return Task.CompletedTask;
+                }
+
+                string? current = _client.GetPropertyString("mute");
+                restoreMute = current is "yes" or "true" ? "yes" : "no";
+                _client.SetProperty("mute", "yes");
+                _client.SetProperty("pause", "no");
+                return Task.CompletedTask;
+            }, CancellationToken.None).ConfigureAwait(false);
+
+            await WaitForAudioOutAsync(generation, TimeSpan.FromMilliseconds(1500)).ConfigureAwait(false);
+            if (generation != _generation)
+            {
+                return;
+            }
+
+            TimeSpan start = request.StartPosition ?? TimeSpan.Zero;
+            await SeekAsync(start, CancellationToken.None).ConfigureAwait(false);
+            _logger.LogInformation("Play: resume seek after open start={Start}", start);
+            await WaitForAudioOutAsync(generation, TimeSpan.FromMilliseconds(800)).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "HTTP resume seek failed");
+        }
+        finally
+        {
+            try
+            {
+                await Enqueue(_ =>
+                {
+                    if (generation != _generation)
+                    {
+                        return Task.CompletedTask;
+                    }
+
+                    _client.SetProperty("mute", restoreMute);
+                    _client.SetProperty("pause", "no");
+                    return Task.CompletedTask;
+                }, CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "HTTP resume unmute failed");
+            }
+
+            if (generation == _generation)
+            {
+                lock (_gate)
+                {
+                    tcs.TrySetResult(Snapshot);
+                }
+            }
+        }
+    }
+
+    private async Task WaitForAudioOutAsync(long generation, TimeSpan budget)
+    {
+        DateTime deadline = DateTime.UtcNow + budget;
+        while (DateTime.UtcNow < deadline)
+        {
+            if (generation != _generation)
+            {
+                return;
+            }
+
+            string? format = await GetPropertyStringAsync("audio-out-params/format", CancellationToken.None)
+                .ConfigureAwait(false);
+            if (!string.IsNullOrWhiteSpace(format))
+            {
+                return;
+            }
+
+            await Task.Delay(50).ConfigureAwait(false);
+        }
     }
 
     private void ApplyTracksFromClient(long generation)

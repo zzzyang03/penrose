@@ -1445,6 +1445,7 @@ public sealed partial class MainWindow : Window
             _progressKey = progressKey;
             HideError();
             await ResetAudioDelayAsync().ConfigureAwait(true);
+            await RestorePassthroughForNewFileAsync().ConfigureAwait(true);
             PlaybackSnapshot loaded = await _engine.LoadAsync(request).ConfigureAwait(true);
             Log.Information(
                 "Play: loaded {Name} generation={Generation} duration={Duration} start={Start}",
@@ -2217,18 +2218,11 @@ public sealed partial class MainWindow : Window
             await _surface.RefreshOutputPipelineAsync().ConfigureAwait(true);
         }
 
-        // Switching Windows HDR / rebuilding the swap chain tears down WASAPI
-        // exclusive (TrueHD bitstream logs "Failed to initialize audio driver").
-        // Playback then sits on the resume timestamp until the user seeks.
+        // Display-mode change tears down exclusive WASAPI. Re-push the audio
+        // policy after the swap chain is back; do not seek — a mid-file seek is
+        // what fails TrueHD bitstream and falls back to stereo PCM.
         await ApplyPlaybackPolicyAsync(save: false).ConfigureAwait(true);
         await SettleAudioAsync().ConfigureAwait(true);
-        if (_engine is not null
-            && ticket == _badgeTicket
-            && _engine.Snapshot.PlaybackGeneration == generation
-            && _engine.Snapshot.Position is { } here)
-        {
-            await _engine.SeekAsync(here + TimeSpan.FromMilliseconds(250)).ConfigureAwait(true);
-        }
 
         if (enable)
         {
@@ -2330,6 +2324,8 @@ public sealed partial class MainWindow : Window
     /// <summary>Pushes a changed <see cref="SimpleSettings.AudioPassthrough"/> to mpv and reads the chain back.</summary>
     private async Task ApplyPassthroughChangedAsync()
     {
+        _bitstreamFallback = false;
+        HintBanner.IsOpen = false;
         await ApplyPlaybackPolicyAsync().ConfigureAwait(true);
         await SettleAudioAsync().ConfigureAwait(true);
     }
@@ -2631,15 +2627,22 @@ public sealed partial class MainWindow : Window
 
     private IReadOnlyList<string> _currentBadges = [];
 
-    private async Task ApplyPlaybackPolicyAsync(bool save = true)
+    private async Task ApplyPlaybackPolicyAsync(bool save = true, bool? passthrough = null)
     {
         if (_engine is null)
         {
             return;
         }
 
-        bool passthrough = _settings.AudioPassthrough;
-        if (passthrough)
+        bool usePassthrough = passthrough ?? _settings.AudioPassthrough;
+        // Stay in shared PCM until the next file (or the user toggles passthrough).
+        // Re-applying exclusive here would reopen stereo-only WASAPI exclusive.
+        if (passthrough is null && _bitstreamFallback)
+        {
+            usePassthrough = false;
+        }
+
+        if (usePassthrough)
         {
             _night = false;
         }
@@ -2652,7 +2655,7 @@ public sealed partial class MainWindow : Window
             AudioDevice = string.IsNullOrWhiteSpace(_settings.AudioDevice) ? null : _settings.AudioDevice,
         }
             .WithAudioPolicy(_audioPolicy)
-            .WithPassthrough(passthrough)
+            .WithPassthrough(usePassthrough)
             .WithNightMode(_night);
         // User downmix from the transport bar overrides the policy's layout. mpv only
         // applies audio-channels to PCM, so a bitstreamed track is unaffected.
@@ -2667,6 +2670,22 @@ public sealed partial class MainWindow : Window
         {
             await SaveSettingsAsync().ConfigureAwait(true);
         }
+    }
+
+    /// <summary>
+    /// A previous file's bitstream fallback left exclusive off. Restore the user's
+    /// passthrough setting before the next loadfile so TrueHD can try SPDIF again.
+    /// </summary>
+    private async Task RestorePassthroughForNewFileAsync()
+    {
+        HintBanner.IsOpen = false;
+        if (!_bitstreamFallback)
+        {
+            return;
+        }
+
+        _bitstreamFallback = false;
+        await ApplyPlaybackPolicyAsync(save: false).ConfigureAwait(true);
     }
 
     /// <summary>
@@ -2693,6 +2712,7 @@ public sealed partial class MainWindow : Window
         }
 
         _spdifActive = spdif;
+        bool wasFallback = _bitstreamFallback;
         if (fallback == _bitstreamFallback)
         {
             // Called again after the AO settles; re-opening the banner would flicker.
@@ -2703,6 +2723,12 @@ public sealed partial class MainWindow : Window
         if (!fallback)
         {
             HintBanner.IsOpen = false;
+            if (wasFallback)
+            {
+                // Bitstream recovered: exclusive SPDIF on again.
+                await ApplyPlaybackPolicyAsync(save: false).ConfigureAwait(true);
+            }
+
             return;
         }
 
@@ -2712,6 +2738,12 @@ public sealed partial class MainWindow : Window
             format);
         SetName(HintBanner, HintBanner.Message);
         HintBanner.IsOpen = true;
+        Log.Information("Audio: bitstream fallback to PCM format={Format}", format);
+        // Exclusive WASAPI after a failed TrueHD/DTS bitstream often only opens
+        // stereo PCM. Drop exclusive (keep the user's PCM layout) so 7.1 / 5.1
+        // can come out of shared mode. The passthrough setting stays on.
+        await ApplyPlaybackPolicyAsync(save: false, passthrough: false).ConfigureAwait(true);
+        await SettleAudioAsync().ConfigureAwait(true);
     }
 
     private async Task ToggleFullscreenAsync()
@@ -5304,6 +5336,7 @@ public sealed partial class MainWindow : Window
             _libraryQueue = queue ?? _libraryQueue;
             HideError();
             await ResetAudioDelayAsync().ConfigureAwait(true);
+            await RestorePassthroughForNewFileAsync().ConfigureAwait(true);
             // No warm-up here: measured on a cloud-backed Emby, a parallel range
             // request only queues behind mpv's own and makes the open slower. The
             // next episode is warmed ahead of time instead (PrefetchNextEpisodeAsync).

@@ -95,6 +95,7 @@ public sealed class MpvPlaybackEngineTests
         IReadOnlyList<string> loadfile = Assert.Single(harness.Client.Commands, c => c[0] == "loadfile");
         Assert.DoesNotContain("start=", loadfile[^1], StringComparison.Ordinal);
 
+        harness.Client.Properties["audio-out-params/format"] = "spdif-truehd";
         harness.Client.Push(new MpvClientEvent(MpvEventId.StartFile, 1, 0));
         harness.Client.Push(new MpvClientEvent(MpvEventId.FileLoaded, 1, 0));
         await load.WaitAsync(TimeSpan.FromSeconds(2));
@@ -103,6 +104,28 @@ public sealed class MpvPlaybackEngineTests
         Assert.Equal("189.6", seek[1]);
         Assert.Equal("absolute", seek[2]);
         Assert.Equal("no", harness.Client.Properties["pause"]);
+        Assert.Equal("no", harness.Client.Properties["mute"]);
+    }
+
+    [Fact]
+    public async Task Http_resume_restores_existing_mute_after_audio_init()
+    {
+        await using EngineHarness harness = await EngineHarness.StartAsync();
+        harness.Client.Properties["mute"] = "yes";
+        PlaybackRequest request = Request("https://example.invalid/a.mkv") with
+        {
+            StartPosition = TimeSpan.FromSeconds(12),
+        };
+        Task<PlaybackSnapshot> load = harness.Engine.LoadAsync(request);
+        await harness.Client.LoadfileIssued.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        harness.Client.Properties["audio-out-params/format"] = "float";
+        harness.Client.Push(new MpvClientEvent(MpvEventId.StartFile, 1, 0));
+        harness.Client.Push(new MpvClientEvent(MpvEventId.FileLoaded, 1, 0));
+        await load.WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.Equal("yes", harness.Client.Properties["mute"]);
+        Assert.Equal("no", harness.Client.Properties["pause"]);
+        Assert.Contains(harness.Client.Commands, c => c.Count > 0 && c[0] == "seek");
     }
 
     [Fact]
