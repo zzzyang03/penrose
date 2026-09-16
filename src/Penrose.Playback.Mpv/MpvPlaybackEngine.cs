@@ -402,6 +402,12 @@ public sealed class MpvPlaybackEngine : IPlaybackEngine
                             _logger.LogError("mpv[{Prefix}] {Text}", evt.LogPrefix, evt.LogText);
                             // The first error of a load is the root cause; later ones are consequences.
                             _lastErrorLog ??= evt.LogPrefix + ": " + evt.LogText;
+                            if (evt.LogPrefix == "ao"
+                                && evt.LogText.StartsWith("Failed to initialize audio driver", StringComparison.Ordinal))
+                            {
+                                LeaveRefusedBitstream();
+                            }
+
                             break;
                         case "warn":
                             _logger.LogWarning("mpv[{Prefix}] {Text}", evt.LogPrefix, evt.LogText);
@@ -436,6 +442,8 @@ public sealed class MpvPlaybackEngine : IPlaybackEngine
         PlaybackSnapshot snapshot = Snapshot;
         if (mapped is FileLoadedEvent fileLoaded && fileLoaded.Generation == snapshot.PlaybackGeneration)
         {
+            // Before reading pause: the HTTP resume seek also unpauses.
+            SeekHttpResume();
             string? pause = _client.GetPropertyString("pause");
             Apply(new PauseChangedEvent
             {
@@ -445,11 +453,6 @@ public sealed class MpvPlaybackEngine : IPlaybackEngine
             AttachExternalSubtitles();
             ApplyDiscTitle();
             ApplyTracksFromClient(stamp);
-            if (BeginHttpResumeIfNeeded(stamp))
-            {
-                return;
-            }
-
             snapshot = Snapshot;
             lock (_gate)
             {
@@ -594,167 +597,57 @@ public sealed class MpvPlaybackEngine : IPlaybackEngine
     }
 
     /// <summary>
-    /// HTTP resume must init WASAPI (and TrueHD SPDIF) on a valid access unit at
-    /// t=0. Seeking while still paused lands mid-frame and exclusive init fails,
-    /// which the host then reports as bitstream→PCM stereo.
+    /// When the device refuses the spdif format (laptop speakers, a TV without
+    /// the codec), mpv logs an AO init failure and falls back to PCM, but this
+    /// libmpv build never feeds the new PCM decoder: audio and video sit at the
+    /// current position until something reinitializes the audio chain. A seek
+    /// does, but reopens exclusive PCM (stereo on most devices); turning off
+    /// exclusive alone retries spdif and stalls again. Leaving spdif and
+    /// exclusive off for this file restarts shared-mode PCM with the full
+    /// layout. The host re-applies the user's passthrough setting on the next
+    /// load and reports the fallback once <c>audio-out-params</c> shows PCM.
     /// </summary>
-    private bool BeginHttpResumeIfNeeded(long generation)
+    private void LeaveRefusedBitstream()
     {
-        PlaybackRequest? request;
-        TaskCompletionSource<PlaybackSnapshot>? tcs;
-        lock (_gate)
+        string? spdif = _client.GetPropertyString("audio-spdif");
+        string? codec = _client.GetPropertyString("audio-codec-name");
+        if (string.IsNullOrEmpty(spdif) || !AudioPassthrough.IsPassthroughCodec(codec))
         {
-            request = _pendingRequest;
-            tcs = _loadTcs;
+            return;
         }
 
-        if (request is null || !request.SeekAfterOpen || request.StartPosition is null || tcs is null)
-        {
-            return false;
-        }
-
-        _ = FinishHttpResumeAsync(request, generation, tcs);
-        return true;
-    }
-
-    private async Task FinishHttpResumeAsync(
-        PlaybackRequest request,
-        long generation,
-        TaskCompletionSource<PlaybackSnapshot> tcs)
-    {
-        string restoreMute = "no";
-        try
-        {
-            await Enqueue(_ =>
-            {
-                if (generation != _generation)
-                {
-                    return Task.CompletedTask;
-                }
-
-                string? current = _client.GetPropertyString("mute");
-                restoreMute = current is "yes" or "true" ? "yes" : "no";
-                _client.SetProperty("mute", "yes");
-                _client.SetProperty("pause", "no");
-                return Task.CompletedTask;
-            }, CancellationToken.None).ConfigureAwait(false);
-
-            // Exclusive TrueHD often fails instantly on HTTP (no AU yet). Do not
-            // seek while exclusive is still armed: that re-inits WASAPI mid-stream
-            // and TrueHD skips frames. Drop to shared PCM first, then seek.
-            await WaitForAudioOutAsync(generation, TimeSpan.FromMilliseconds(800)).ConfigureAwait(false);
-            await DropExclusiveIfBitstreamFailedAsync(generation).ConfigureAwait(false);
-            if (generation != _generation)
-            {
-                return;
-            }
-
-            TimeSpan start = request.StartPosition ?? TimeSpan.Zero;
-            await SeekAsync(start, CancellationToken.None).ConfigureAwait(false);
-            _logger.LogInformation("Play: resume seek after open start={Start}", start);
-            await WaitForAudioOutAsync(generation, TimeSpan.FromMilliseconds(800)).ConfigureAwait(false);
-            await DropExclusiveIfBitstreamFailedAsync(generation).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "HTTP resume seek failed");
-        }
-        finally
-        {
-            try
-            {
-                await Enqueue(_ =>
-                {
-                    if (generation != _generation)
-                    {
-                        return Task.CompletedTask;
-                    }
-
-                    _client.SetProperty("mute", restoreMute);
-                    _client.SetProperty("pause", "no");
-                    return Task.CompletedTask;
-                }, CancellationToken.None).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "HTTP resume unmute failed");
-            }
-
-            if (generation == _generation)
-            {
-                lock (_gate)
-                {
-                    tcs.TrySetResult(Snapshot);
-                }
-            }
-        }
-    }
-
-    private async Task WaitForAudioOutAsync(long generation, TimeSpan budget)
-    {
-        DateTime deadline = DateTime.UtcNow + budget;
-        while (DateTime.UtcNow < deadline)
-        {
-            if (generation != _generation)
-            {
-                return;
-            }
-
-            string? format = await GetPropertyStringAsync("audio-out-params/format", CancellationToken.None)
-                .ConfigureAwait(false);
-            if (!string.IsNullOrWhiteSpace(format))
-            {
-                return;
-            }
-
-            await Task.Delay(50).ConfigureAwait(false);
-        }
+        _client.SetProperty("audio-exclusive", "no");
+        _client.SetProperty("audio-spdif", "");
+        _logger.LogInformation("Audio: device refused bitstream codec={Codec}; switched to shared PCM", codec);
     }
 
     /// <summary>
-    /// If HTTP resume did not get an SPDIF AO, exclusive WASAPI must come down
-    /// before the resume seek. Exclusive PCM typically opens stereo only.
+    /// HTTP resume opens from byte 0 (no loadfile <c>start=</c>) and seeks once
+    /// FILE_LOADED says the container index is available. Audio output is left
+    /// alone: whether spdif comes up depends on the device, not on the position.
     /// </summary>
-    private async Task DropExclusiveIfBitstreamFailedAsync(long generation)
+    private void SeekHttpResume()
     {
-        if (generation != _generation)
+        PlaybackRequest? request;
+        lock (_gate)
+        {
+            request = _pendingRequest;
+        }
+
+        if (request is null || !request.SeekAfterOpen || request.StartPosition is not { } start)
         {
             return;
         }
 
-        string? format = await GetPropertyStringAsync("audio-out-params/format", CancellationToken.None)
-            .ConfigureAwait(false);
-        if (AudioPassthrough.IsSpdifFormat(format))
-        {
-            return;
-        }
-
-        string? exclusive = await GetPropertyStringAsync("audio-exclusive", CancellationToken.None)
-            .ConfigureAwait(false);
-        if (exclusive is not "yes")
-        {
-            return;
-        }
-
-        await Enqueue(_ =>
-        {
-            if (generation != _generation)
-            {
-                return Task.CompletedTask;
-            }
-
-            _client.SetProperty("audio-exclusive", "no");
-            _client.SetProperty("audio-spdif", "");
-            return Task.CompletedTask;
-        }, CancellationToken.None).ConfigureAwait(false);
-        _logger.LogInformation("Play: HTTP resume dropped exclusive format={Format}", format);
-        if (!string.IsNullOrWhiteSpace(format))
-        {
-            // Stale exclusive-PCM params would make WaitForAudioOut return immediately.
-            await Task.Delay(400).ConfigureAwait(false);
-        }
-
-        await WaitForAudioOutAsync(generation, TimeSpan.FromMilliseconds(800)).ConfigureAwait(false);
+        _client.CommandAsync(
+            [
+                "seek",
+                start.TotalSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                "absolute",
+            ],
+            _client.NextReplyUserdata());
+        _client.SetProperty("pause", "no");
+        _logger.LogInformation("Play: resume seek after open start={Start}", start);
     }
 
     private void ApplyTracksFromClient(long generation)

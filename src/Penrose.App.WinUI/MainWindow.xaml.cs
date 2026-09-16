@@ -2218,9 +2218,8 @@ public sealed partial class MainWindow : Window
             await _surface.RefreshOutputPipelineAsync().ConfigureAwait(true);
         }
 
-        // Display-mode change tears down exclusive WASAPI. Re-push the audio
-        // policy after the swap chain is back; do not seek — a mid-file seek is
-        // what fails TrueHD bitstream and falls back to stereo PCM.
+        // A display-mode change can invalidate an exclusive WASAPI stream on an
+        // HDMI endpoint. Re-push the audio policy once the swap chain is back.
         await ApplyPlaybackPolicyAsync(save: false).ConfigureAwait(true);
         await SettleAudioAsync().ConfigureAwait(true);
 
@@ -2717,8 +2716,9 @@ public sealed partial class MainWindow : Window
         bool spdif = false;
         bool fallback = false;
         string? format = null;
-        if (_engine is not null
-            && _engine.Snapshot.MediaPhase is not (MediaPhase.Empty or MediaPhase.Opening or MediaPhase.Failed))
+        bool loaded = _engine is not null
+            && _engine.Snapshot.MediaPhase is not (MediaPhase.Empty or MediaPhase.Opening or MediaPhase.Failed);
+        if (loaded && _engine is not null)
         {
             format = await _engine.GetPropertyStringAsync("audio-out-params/format").ConfigureAwait(true);
             spdif = AudioPassthrough.IsSpdifFormat(format);
@@ -2730,6 +2730,14 @@ public sealed partial class MainWindow : Window
         }
 
         _spdifActive = spdif;
+        if (loaded && _bitstreamFallback && string.IsNullOrWhiteSpace(format))
+        {
+            // The AO is reopening (e.g. the shared-PCM push below). An empty format
+            // is not a recovered bitstream; re-enabling exclusive here would retry
+            // spdif on a device that already refused it.
+            return;
+        }
+
         bool wasFallback = _bitstreamFallback;
         if (fallback == _bitstreamFallback)
         {

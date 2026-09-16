@@ -95,61 +95,101 @@ public sealed class MpvPlaybackEngineTests
         IReadOnlyList<string> loadfile = Assert.Single(harness.Client.Commands, c => c[0] == "loadfile");
         Assert.DoesNotContain("start=", loadfile[^1], StringComparison.Ordinal);
 
-        harness.Client.Properties["audio-exclusive"] = "yes";
-        harness.Client.Properties["audio-spdif"] = AudioPassthrough.SpdifCodecs;
-        harness.Client.Properties["audio-out-params/format"] = "spdif-truehd";
         harness.Client.Push(new MpvClientEvent(MpvEventId.StartFile, 1, 0));
         harness.Client.Push(new MpvClientEvent(MpvEventId.FileLoaded, 1, 0));
-        await load.WaitAsync(TimeSpan.FromSeconds(2));
+        PlaybackSnapshot loaded = await load.WaitAsync(TimeSpan.FromSeconds(2));
 
         IReadOnlyList<string> seek = Assert.Single(harness.Client.Commands, c => c.Count > 0 && c[0] == "seek");
         Assert.Equal("189.6", seek[1]);
         Assert.Equal("absolute", seek[2]);
         Assert.Equal("no", harness.Client.Properties["pause"]);
-        Assert.Equal("no", harness.Client.Properties["mute"]);
+        Assert.Equal(PlaybackIntent.Playing, loaded.PlaybackIntent);
+    }
+
+    [Theory]
+    [InlineData("truehd")]
+    [InlineData("eac3")]
+    public async Task Refused_bitstream_switches_to_shared_pcm(string codec)
+    {
+        await using EngineHarness harness = await EngineHarness.StartAsync();
+        await harness.LoadAsync();
+        harness.Client.Properties["audio-exclusive"] = "yes";
+        harness.Client.Properties["audio-spdif"] = AudioPassthrough.SpdifCodecs;
+        harness.Client.Properties["audio-codec-name"] = codec;
+
+        PushAoInitFailure(harness);
+
+        await WaitForPropertyAsync(harness, "audio-spdif", "");
+        Assert.Equal("no", harness.Client.Properties["audio-exclusive"]);
+    }
+
+    [Theory]
+    [InlineData("aac", "ac3,eac3,dts,dts-hd,truehd")]
+    [InlineData("truehd", "")]
+    public async Task Ao_failure_without_bitstream_leaves_audio_options_alone(string codec, string spdif)
+    {
+        await using EngineHarness harness = await EngineHarness.StartAsync();
+        await harness.LoadAsync();
+        harness.Client.Properties["audio-exclusive"] = "yes";
+        harness.Client.Properties["audio-spdif"] = spdif;
+        harness.Client.Properties["audio-codec-name"] = codec;
+
+        PushAoInitFailure(harness);
+        // Processed after the log line, so the log has been handled once this lands.
+        harness.PushProperty("pause", flag: true);
+        await harness.WaitForSnapshotAsync(s => s.PlaybackIntent == PlaybackIntent.Paused);
+
         Assert.Equal("yes", harness.Client.Properties["audio-exclusive"]);
+        Assert.Equal(spdif, harness.Client.Properties["audio-spdif"]);
+    }
+
+    private static void PushAoInitFailure(EngineHarness harness) =>
+        harness.Client.Push(new MpvClientEvent(
+            MpvEventId.LogMessage,
+            ReplyUserdata: 0,
+            Error: 0,
+            LogPrefix: "ao",
+            LogLevel: "error",
+            LogText: "Failed to initialize audio driver 'wasapi'"));
+
+    private static async Task WaitForPropertyAsync(EngineHarness harness, string name, string expected)
+    {
+        DateTime deadline = DateTime.UtcNow.AddSeconds(2);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (harness.Client.Properties.TryGetValue(name, out string? value) && value == expected)
+            {
+                return;
+            }
+
+            await Task.Delay(10);
+        }
+
+        Assert.Fail($"{name} never became '{expected}'");
     }
 
     [Fact]
-    public async Task Http_resume_drops_exclusive_when_ao_is_pcm()
+    public async Task Http_resume_leaves_audio_output_options_alone_before_the_ao_opens()
     {
+        // Regression: resume used to treat "no AO yet" as a failed bitstream and
+        // drop exclusive / spdif, which forced PCM on receivers that do support it.
         await using EngineHarness harness = await EngineHarness.StartAsync();
         harness.Client.Properties["audio-exclusive"] = "yes";
         harness.Client.Properties["audio-spdif"] = AudioPassthrough.SpdifCodecs;
+        harness.Client.Properties["mute"] = "no";
         PlaybackRequest request = Request("https://example.invalid/a.mkv") with
         {
             StartPosition = TimeSpan.FromSeconds(90),
         };
         Task<PlaybackSnapshot> load = harness.Engine.LoadAsync(request);
         await harness.Client.LoadfileIssued.Task.WaitAsync(TimeSpan.FromSeconds(2));
-        harness.Client.Properties["audio-out-params/format"] = "s32";
         harness.Client.Push(new MpvClientEvent(MpvEventId.StartFile, 1, 0));
         harness.Client.Push(new MpvClientEvent(MpvEventId.FileLoaded, 1, 0));
         await load.WaitAsync(TimeSpan.FromSeconds(2));
 
-        Assert.Equal("no", harness.Client.Properties["audio-exclusive"]);
-        Assert.Equal("", harness.Client.Properties["audio-spdif"]);
-        Assert.Contains(harness.Client.Commands, c => c.Count > 0 && c[0] == "seek");
-    }
-
-    [Fact]
-    public async Task Http_resume_restores_existing_mute_after_audio_init()
-    {
-        await using EngineHarness harness = await EngineHarness.StartAsync();
-        harness.Client.Properties["mute"] = "yes";
-        PlaybackRequest request = Request("https://example.invalid/a.mkv") with
-        {
-            StartPosition = TimeSpan.FromSeconds(12),
-        };
-        Task<PlaybackSnapshot> load = harness.Engine.LoadAsync(request);
-        await harness.Client.LoadfileIssued.Task.WaitAsync(TimeSpan.FromSeconds(2));
-        harness.Client.Properties["audio-out-params/format"] = "float";
-        harness.Client.Push(new MpvClientEvent(MpvEventId.StartFile, 1, 0));
-        harness.Client.Push(new MpvClientEvent(MpvEventId.FileLoaded, 1, 0));
-        await load.WaitAsync(TimeSpan.FromSeconds(2));
-
-        Assert.Equal("yes", harness.Client.Properties["mute"]);
-        Assert.Equal("no", harness.Client.Properties["pause"]);
+        Assert.Equal("yes", harness.Client.Properties["audio-exclusive"]);
+        Assert.Equal(AudioPassthrough.SpdifCodecs, harness.Client.Properties["audio-spdif"]);
+        Assert.Equal("no", harness.Client.Properties["mute"]);
         Assert.Contains(harness.Client.Commands, c => c.Count > 0 && c[0] == "seek");
     }
 
